@@ -6,6 +6,10 @@ import { THEMES } from '../board.js';
 import { peek, fingerprint, gameId, invalidate } from '../games.js';
 import { buildGame } from '../quizgen.js';
 
+// GPLv3 로 배포하므로 앱 안에서 소스 위치를 밝혀야 한다
+const SOURCE_URL = 'https://github.com/nataws88-ui/chess-review';
+const POLICY_URL = 'https://nataws88-ui.github.io/chess-review/store/privacy-policy.html';
+
 const MOVETIMES = [[150, '빠름'], [250, '보통'], [500, '정밀'], [1000, '최고']];
 const THEME_KO = { green: '클래식 그린', wood: '우드', ocean: '오션', slate: '슬레이트' };
 
@@ -203,6 +207,12 @@ export async function about(app) {
         } catch (e) { toast('엔진 오류: ' + (e.message || e)); }
       },
     }, '엔진 상태 확인')));
+
+  b.appendChild(h('div.card',
+    h('h3', '소스 코드'),
+    h('p.sub.mb', 'GPLv3에 따라 이 앱의 전체 소스를 공개합니다.'),
+    h('a.btn.wide', { href: SOURCE_URL, target: '_blank' }, 'GitHub에서 보기'),
+    h('a.btn.wide.ghost.mt', { href: POLICY_URL, target: '_blank' }, '개인정보 처리방침')));
 
   b.appendChild(h('div.card',
     h('h3', '오픈소스 라이선스'),

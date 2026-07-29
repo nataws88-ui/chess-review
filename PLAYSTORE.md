@@ -20,8 +20,10 @@
 | 등록 문구·개인정보처리방침 | ✅ `store/listing-ko.md`, `store/privacy-policy.html` |
 | git 저장소 | ✅ 커밋 완료 (`main` 브랜치, 아직 push 안 함) |
 | 기존 진도 이전 파일 | ✅ `/sdcard/체스퀴즈/복기왕-이전.json` (11판) |
-| **GitHub 로그인** | ⬜ `gh auth login` — **여기서부터 사람이 해야 함** |
-| 스크린샷 | ⬜ 설치 후 실제 화면 촬영 (2장 이상) |
+| GitHub 저장소 | ✅ https://github.com/nataws88-ui/chess-review (public) |
+| 서명키 비밀값 | ✅ Actions secrets 4개 등록 완료 |
+| 개인정보처리방침 URL | ✅ https://nataws88-ui.github.io/chess-review/store/privacy-policy.html |
+| 스크린샷 | ⬜ 설치 후 실제 화면 촬영 (2장 이상) — **여기서부터 사람이 해야 함** |
 | 개발자 계정 | ⬜ (「임계 CRITICAL」과 공유) |
 
 ---

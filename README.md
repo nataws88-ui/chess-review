@@ -2,6 +2,9 @@
 
 **내가 둔 실수를, 내 문제로 다시 푼다.**
 
+[![빌드](https://github.com/nataws88-ui/chess-review/actions/workflows/build.yml/badge.svg)](https://github.com/nataws88-ui/chess-review/actions)
+· [개인정보 처리방침](https://nataws88-ui.github.io/chess-review/store/privacy-policy.html)
+
 내 경기(PGN)를 스톡피시가 분석해 실수를 찾아내고, 그 장면을 **판에서 직접 두어 답하는 문제**로
 만들어 줍니다. 틀린 문제는 안키식 간격 반복(1→3→7→14→30→60일)으로 다시 나옵니다.
 
