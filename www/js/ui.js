@@ -159,11 +159,26 @@ export function httpGet(url) {
 }
 
 export function pickFile() {
-  if (!Native || !Native.pickFile) return Promise.reject(new Error('앱에서만 가능합니다'));
-  const id = 'f' + (++reqSeq);
+  if (Native && Native.pickFile) {
+    const id = 'f' + (++reqSeq);
+    return new Promise((resolve, reject) => {
+      reqMap.set(id, { resolve, reject });
+      Native.pickFile(id);
+    });
+  }
+  // 브라우저 미리보기용 — 파일 선택창
   return new Promise((resolve, reject) => {
-    reqMap.set(id, { resolve, reject });
-    Native.pickFile(id);
+    const inp = h('input', { type: 'file', accept: '.json,.pgn,application/json,text/plain', style: 'display:none' });
+    inp.addEventListener('change', () => {
+      const f = inp.files && inp.files[0];
+      if (!f) { inp.remove(); return reject(new Error('취소')); }
+      const r = new FileReader();
+      r.onload = () => { inp.remove(); resolve({ name: f.name, content: String(r.result) }); };
+      r.onerror = () => { inp.remove(); reject(new Error('읽기 실패')); };
+      r.readAsText(f);
+    });
+    document.body.appendChild(inp);
+    inp.click();
   });
 }
 

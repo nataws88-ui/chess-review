@@ -126,12 +126,7 @@ export async function view(app) {
 
   async function doImport() {
     let text;
-    if (isApp) {
-      try { text = (await pickFile()).content; } catch (e) { return; }
-    } else {
-      text = prompt('백업 JSON을 붙여넣으세요');
-      if (!text) return;
-    }
+    try { text = (await pickFile()).content; } catch (e) { return; }
     let data;
     try { data = JSON.parse(text); } catch (e) { return toast('JSON을 읽을 수 없습니다'); }
     if (!data || !Array.isArray(data.games)) return toast('형식이 맞지 않는 파일입니다');
