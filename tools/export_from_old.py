@@ -15,18 +15,16 @@
 """
 
 import argparse
-import http.server
 import json
 import os
 import re
-import shutil
-import socketserver
 import sys
-import threading
 import time
 
 HDR = re.compile(r'^\[(\w+)\s+"(.*)"\]\s*$')
-PORT = 8125
+
+# 기존 로컬 서버(server.py)가 서빙하는 폴더
+SERVED_DIR = '/sdcard/체스퀴즈'
 
 
 def read_headers(text):
@@ -96,93 +94,67 @@ body{background:#15141b;color:#eceaf2;font-family:system-ui,'Noto Sans KR',sans-
 padding:22px 16px;max-width:520px;margin:0 auto;line-height:1.6}
 h1{font-size:1.25rem;margin-bottom:6px}
 .box{background:#201f2a;border:1px solid #373544;border-radius:14px;padding:15px;margin:14px 0}
-button{width:100%;padding:14px;border-radius:12px;border:0;background:#7fa650;color:#0d1408;
-font-weight:800;font-size:1rem}
-button.sec{background:#2b2937;color:#eceaf2;margin-top:8px}
-pre{white-space:pre-wrap;word-break:break-all;font-size:.72rem;color:#a29fb0;max-height:180px;overflow:auto}
+button{width:100%;padding:15px;border-radius:12px;border:0;background:#7fa650;color:#0d1408;
+font-weight:800;font-size:1.02rem}
+button.sec{background:#2b2937;color:#eceaf2;margin-top:9px;font-size:.92rem;padding:12px}
+button[disabled]{opacity:.5}
+pre{white-space:pre-wrap;word-break:break-all;font-size:.74rem;color:#a29fb0;max-height:200px;overflow:auto;margin:0}
 .ok{color:#8fe3ab;font-weight:700}.no{color:#ff9a9a;font-weight:700}
+.step{color:#a29fb0;font-size:.9rem;margin-top:14px;padding-left:12px;border-left:3px solid #7fa650}
 </style></head><body>
-<h1>♟️ 훈련 진도를 앱으로 이전</h1>
-<p style="color:#a29fb0">이 페이지는 <b>기존 체스 퀴즈</b>에 저장된 복습 진도(안키 카드)를 읽어
-새 앱 「체스 복기왕」으로 옮깁니다. 기존 데이터는 지우지 않습니다.</p>
+<h1>♟️ 기존 진도를 앱으로 이전</h1>
+<p style="color:#a29fb0">기존 <b>체스 퀴즈</b>의 경기·분석과 이 브라우저에 저장된
+<b>복습 진도(안키 카드)</b>를 하나로 묶어 새 앱 「체스 복기왕」으로 옮깁니다.
+기존 데이터는 그대로 둡니다.</p>
 <div class="box" id="info">읽는 중…</div>
-<button onclick="send()">진도 보내기 (이전 도구로)</button>
-<button class="sec" onclick="dl()">파일로 저장 (수동 이전용)</button>
-<div class="box"><pre id="log"></pre></div>
+<button id="go" onclick="makeFile()">완성 파일 만들기</button>
+<button class="sec" onclick="dlSrs()">진도만 따로 저장</button>
+<div class="box"><pre id="log">준비됨.</pre></div>
+<div class="step">저장한 뒤 앱에서<br><b>설정 → 데이터 → 📥 가져오기</b> → 방금 받은 파일 선택</div>
 <script>
-var KEY='cq_srs_v1', data={};
-try{data=JSON.parse(localStorage.getItem(KEY)||'{}')}catch(e){}
-var n=Object.keys(data).length;
+var KEY='cq_srs_v1', srs={};
+try{srs=JSON.parse(localStorage.getItem(KEY)||'{}')}catch(e){}
+var n=Object.keys(srs).length;
 document.getElementById('info').innerHTML = n
-  ? '복습 카드 <b>'+n+'장</b>의 진도를 찾았습니다.'
-  : '<span class="no">저장된 진도가 없습니다.</span> (훈련을 한 번도 안 했거나 다른 주소에서 열었을 수 있습니다)';
-function log(s,c){var e=document.getElementById('log');e.innerHTML+=(c?'<span class="'+c+'">'+s+'</span>':s)+'\\n';}
-function send(){
-  log('보내는 중…');
-  fetch('http://127.0.0.1:__PORT__/srs',{method:'POST',body:JSON.stringify(data)})
-    .then(function(r){return r.text()})
-    .then(function(t){log('✅ 보냈습니다: '+t,'ok');})
-    .catch(function(e){log('❌ 실패: '+e+' — 이전 도구(export_from_old.py)가 실행 중인지 확인하세요','no');});
-}
-function dl(){
-  var b=new Blob([JSON.stringify({app:'chess-review',v:1,games:[],srs:data})],{type:'application/json'});
-  var a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='복기왕-진도.json';
+  ? '이 브라우저에서 복습 진도 <b>'+n+'장</b>을 찾았습니다.'
+  : '<span class="no">저장된 진도가 없습니다.</span> 훈련을 한 번도 안 했거나, 다른 브라우저에서 훈련했을 수 있습니다. (경기·분석은 그래도 옮겨집니다)';
+function log(s,c){var e=document.getElementById('log');e.innerHTML+='\\n'+(c?'<span class="'+c+'">'+s+'</span>':s);}
+function save(obj,name){
+  var b=new Blob([JSON.stringify(obj)],{type:'application/json'});
+  var a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name;
   document.body.appendChild(a);a.click();a.remove();
-  log('💾 다운로드 폴더에 저장했습니다 (앱에서 설정 → 가져오기)','ok');
+}
+function makeFile(){
+  var btn=document.getElementById('go');btn.disabled=true;
+  log('경기 데이터를 읽는 중…');
+  fetch('복기왕-이전.json',{cache:'no-store'})
+    .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+    .then(function(d){
+      d.srs = srs;
+      save(d,'복기왕-이전-완성.json');
+      log('✅ 경기 '+d.games.length+'판 + 진도 '+n+'장 → 다운로드 폴더에 저장했습니다','ok');
+      log('   파일 이름: 복기왕-이전-완성.json');
+      btn.disabled=false;
+    })
+    .catch(function(e){
+      log('❌ 경기 데이터를 못 읽었습니다 ('+e.message+')','no');
+      log('   export_from_old.py 를 먼저 실행했는지 확인하세요.');
+      log('   대신 [진도만 따로 저장] 을 눌러도 됩니다.');
+      btn.disabled=false;
+    });
+}
+function dlSrs(){
+  save({app:'chess-review',v:1,games:[],srs:srs},'복기왕-진도.json');
+  log('💾 진도 '+n+'장만 저장했습니다 (앱에서 경기 파일과 각각 가져오면 됩니다)','ok');
 }
 </script></body></html>'''
-
-
-class SrsHandler(http.server.BaseHTTPRequestHandler):
-    received = None
-
-    def _cors(self):
-        self.send_header('Access-Control-Allow-Origin', '*')
-        self.send_header('Access-Control-Allow-Headers', '*')
-
-    def do_OPTIONS(self):
-        self.send_response(204)
-        self._cors()
-        self.end_headers()
-
-    def do_POST(self):
-        n = int(self.headers.get('Content-Length', 0))
-        body = self.rfile.read(n).decode('utf-8', 'replace')
-        try:
-            SrsHandler.received = json.loads(body)
-            msg = f'{len(SrsHandler.received)}장 수신'
-        except Exception as e:
-            msg = f'파싱 실패: {e}'
-        self.send_response(200)
-        self._cors()
-        self.send_header('Content-Type', 'text/plain; charset=utf-8')
-        self.end_headers()
-        self.wfile.write(msg.encode('utf-8'))
-
-    def log_message(self, *a):
-        pass
-
-
-def wait_for_srs(seconds):
-    with socketserver.TCPServer(('127.0.0.1', PORT), SrsHandler) as srv:
-        srv.timeout = 1
-        t0 = time.time()
-        while time.time() - t0 < seconds:
-            srv.handle_request()
-            if SrsHandler.received is not None:
-                return SrsHandler.received
-            left = int(seconds - (time.time() - t0))
-            print(f'\r  진도 수신 대기… {left}초  ', end='', flush=True)
-    print()
-    return None
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--src', default='/root/chess', help='기존 체스 퀴즈 폴더')
     ap.add_argument('--out', default=None, help='내보낼 JSON 경로')
-    ap.add_argument('--no-srs', action='store_true', help='훈련 진도 수집 생략')
-    ap.add_argument('--wait', type=int, default=180, help='진도 수신 대기 초')
+    ap.add_argument('--no-page', action='store_true', help='이전 페이지 설치 생략')
     args = ap.parse_args()
 
     src = args.src
@@ -193,51 +165,40 @@ def main():
     analyzed = sum(1 for g in games if g['report'])
     print(f'\n✅ 경기 {len(games)}판 (분석 데이터 있음 {analyzed}판)')
 
-    # 이전 페이지는 항상 설치해 둔다 (기존 시스템에 파일 하나 추가할 뿐, 아무것도 건드리지 않음)
-    srs = {}
-    html_dir = os.path.join(src, 'html')
-    page_path = os.path.join(html_dir, '앱이전.html')
-    page_ok = os.path.isdir(html_dir)
-    if page_ok:
-        with open(page_path, 'w', encoding='utf-8') as f:
-            f.write(PAGE.replace('__PORT__', str(PORT)))
-        sd = '/sdcard/체스퀴즈'
-        if os.path.isdir(sd):
-            try:
-                shutil.copy(page_path, sd)
-            except Exception:
-                pass
-        print(f'\n📄 이전 페이지 설치: {page_path}')
-        print('   폰에서 열기 →  http://127.0.0.1:8123/앱이전.html')
-    else:
-        print(f'⚠️ {html_dir} 가 없어 이전 페이지를 넣지 못했습니다')
-
-    if not args.no_srs and page_ok:
-        print('   위 주소를 열고 [진도 보내기] 를 누르세요.\n')
-        got = wait_for_srs(args.wait)
-        if got:
-            srs = got
-            print(f'\n✅ 훈련 진도 {len(srs)}장 수신')
-        else:
-            print('\n⏭  진도 없이 계속합니다 (페이지의 [파일로 저장] 으로 나중에 따로 옮겨도 됩니다)')
-
     data = {
         'app': 'chess-review', 'v': 1, 'from': 'legacy',
         'exportedAt': time.strftime('%Y-%m-%dT%H:%M:%S'),
-        'games': games, 'srs': srs,
+        'games': games, 'srs': {},
     }
 
+    # 기존 로컬 서버가 서빙하는 폴더에 두면, 이전 페이지가 이 파일을 직접 읽어
+    # 브라우저의 훈련 진도와 합쳐 '완성 파일' 하나를 만들어 준다.
     out = args.out
     if not out:
-        out = '/sdcard/체스퀴즈/복기왕-이전.json' if os.path.isdir('/sdcard/체스퀴즈') \
+        out = os.path.join(SERVED_DIR, '복기왕-이전.json') if os.path.isdir(SERVED_DIR) \
             else os.path.join(os.path.expanduser('~'), '복기왕-이전.json')
-    os.makedirs(os.path.dirname(out), exist_ok=True)
+    os.makedirs(os.path.dirname(out) or '.', exist_ok=True)
     with open(out, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False)
-    size = os.path.getsize(out) / 1024
-    print(f'\n💾 저장 완료: {out}  ({size:.0f}KB)')
-    print('\n다음 단계 ─ 앱에서:')
-    print('  설정 → 데이터 → [📥 가져오기] → 이 파일 선택')
+    print(f'\n💾 경기 파일 저장: {out}  ({os.path.getsize(out) / 1024:.0f}KB)')
+
+    # 이전 페이지 — 경기 파일과 같은 폴더에 둬야 서로 읽을 수 있다
+    if not args.no_page:
+        page_dir = os.path.dirname(out) or '.'
+        page_path = os.path.join(page_dir, '앱이전.html')
+        with open(page_path, 'w', encoding='utf-8') as f:
+            f.write(PAGE)
+        print(f'📄 이전 페이지 설치: {page_path}')
+
+    print('\n다음 단계 ─ 폰에서:')
+    if os.path.dirname(out) == SERVED_DIR.rstrip('/'):
+        print('  1) 브라우저로 열기 →  http://127.0.0.1:8123/앱이전.html')
+        print('     (기존 체스 퀴즈 서버가 켜져 있어야 합니다)')
+        print('  2) [완성 파일 만들기] 누르기 → 경기 + 훈련 진도가 한 파일로 저장됨')
+        print('  3) 앱에서 설정 → 데이터 → [📥 가져오기] → 그 파일 선택')
+    else:
+        print('  앱에서 설정 → 데이터 → [📥 가져오기] → 이 파일 선택')
+        print('  (훈련 진도까지 옮기려면 기존 서버 폴더에서 실행하세요)')
 
 
 if __name__ == '__main__':
