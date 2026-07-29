@@ -4,7 +4,8 @@
   --tx:#E8ECF3; --sub:#98A2B3; --dim:#6B7684;
   --accent:#4ADE80; --accent2:#22C55E; --gold:#F2C14E;
   --red:#F26D6D; --orange:#F0A030; --blue:#5AA9FF; --purple:#A78BFA;
-  --r:16px; --safe-b:env(safe-area-inset-bottom,0px);
+  /* --safe-t/--safe-b(시스템 바 여백)와 --ad-h(배너 높이)는 앱이 실측값으로 덮어쓴다 */
+  --r:16px; --safe-t:0px; --safe-b:env(safe-area-inset-bottom,0px); --ad-h:0px;
   color-scheme:dark;
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
@@ -21,14 +22,15 @@ body{
 button,input,select,textarea{font:inherit;color:inherit}
 a{color:var(--accent);text-decoration:none}
 
-#app{max-width:600px;margin:0 auto;padding-bottom:calc(76px + var(--safe-b))}
+#app{max-width:600px;margin:0 auto;padding-bottom:calc(76px + var(--safe-b) + var(--ad-h))}
 .screen{animation:fade .22s ease}
 @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 
 /* ---------- 헤더 ---------- */
 .top{
   position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:8px;
-  padding:12px 14px;background:rgba(14,17,22,.86);backdrop-filter:blur(12px);
+  padding:12px 14px;padding-top:calc(12px + var(--safe-t));
+  background:rgba(14,17,22,.86);backdrop-filter:blur(12px);
   border-bottom:1px solid var(--line);
 }
 .title{font-size:1.05rem;font-weight:800;letter-spacing:-.02em;flex:1;min-width:0;
@@ -157,7 +159,7 @@ label.fld .k{display:block;font-size:.82rem;color:var(--sub);font-weight:700;mar
 .sw.on::after{transform:translateX(20px);background:var(--accent)}
 
 /* ---------- 하단 탭 ---------- */
-.nav{position:fixed;left:0;right:0;bottom:0;z-index:30;display:flex;
+.nav{position:fixed;left:0;right:0;bottom:var(--ad-h);z-index:30;display:flex;
   background:rgba(16,20,26,.94);backdrop-filter:blur(14px);border-top:1px solid var(--line);
   padding-bottom:var(--safe-b)}
 .nav a{flex:1;text-align:center;padding:9px 2px 8px;color:var(--dim);font-size:.68rem;font-weight:700}
@@ -165,7 +167,7 @@ label.fld .k{display:block;font-size:.82rem;color:var(--sub);font-weight:700;mar
 .nav a.on{color:var(--accent)}
 
 /* ---------- 토스트 ---------- */
-.toast{position:fixed;left:50%;bottom:calc(88px + var(--safe-b));transform:translate(-50%,14px);
+.toast{position:fixed;left:50%;bottom:calc(88px + var(--safe-b) + var(--ad-h));transform:translate(-50%,14px);
   background:#222a36;border:1px solid var(--line2);color:var(--tx);padding:11px 16px;
   border-radius:12px;font-size:.87rem;font-weight:600;opacity:0;pointer-events:none;
   transition:opacity .2s,transform .2s;z-index:100;max-width:88%;text-align:center;

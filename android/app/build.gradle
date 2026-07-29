@@ -78,4 +78,9 @@ android {
 dependencies {
     // WebViewAssetLoader(로컬 파일을 https 오리진처럼 제공) + 강제 다크모드 차단
     implementation 'androidx.webkit:webkit:1.12.1'
+
+    // 광고(AdMob). 광고 ID는 res/values/admob.xml 한 파일에만 있다.
+    implementation 'com.google.android.gms:play-services-ads:25.4.0'
+    // 유럽 개인정보 동의 양식(UMP) — 전 세계 배포 시 필수
+    implementation 'com.google.android.ump:user-messaging-platform:4.0.0'
 }

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ★★★ 광고 ID — 여기 세 줄만 바꾸면 실제 수익이 들어옵니다 ★★★
+
+  지금 값은 구글이 공개한 "테스트 전용" ID 입니다.
+  테스트 ID로는 광고가 정상적으로 보이지만 수익은 0원이며, 대신
+  실수로 내 광고를 눌러 계정이 정지될 위험이 없습니다.
+
+  실제 ID 받는 곳: AdMob → 앱 → 광고 단위 (자세한 순서는 PLAYSTORE.md 참고)
+    admob_app_id      : AdMob 앱 ID          (ca-app-pub-XXXX~YYYY  ← 물결표 ~)
+    admob_banner      : 배너 광고 단위 ID     (ca-app-pub-XXXX/YYYY  ← 슬래시 /)
+    admob_interstitial: 전면 광고 단위 ID     (ca-app-pub-XXXX/YYYY)
+  바꾼 뒤 admob_is_test 를 false 로 두면 설정 화면의 "테스트 광고" 안내가 사라집니다.
+
+  ⚠️ 실제 ID로 바꾼 다음에는 내 광고를 절대 직접 누르지 마세요 (무효 트래픽 = 계정 정지).
+-->
+<resources>
+    <string name="admob_app_id" translatable="false">ca-app-pub-3940256099942544~3347511713</string>
+    <string name="admob_banner" translatable="false">ca-app-pub-3940256099942544/6300978111</string>
+    <string name="admob_interstitial" translatable="false">ca-app-pub-3940256099942544/1033173712</string>
+    <bool name="admob_is_test">true</bool>
+</resources>

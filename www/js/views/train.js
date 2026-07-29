@@ -1,6 +1,6 @@
 /* 🎯 훈련 — 모든 경기의 실수를 모아 안키식 간격 반복으로 복습 */
 
-import { h, nav, screen, toast, clear, play } from '../ui.js';
+import { h, nav, screen, toast, clear, play, adBreak } from '../ui.js';
 import { settings, setSetting, getSrs, setSrs, schedule, today, store } from '../store.js';
 import { allCards } from '../games.js';
 import { legalMovesData } from '../quizgen.js';
@@ -142,6 +142,8 @@ export async function view(app) {
       h('div.btn-row.mt',
         h('button.btn', { onclick: () => build(true) }, '한 번 더 (전체에서)'),
         h('button.btn.primary', { onclick: () => nav('/') }, '경기 목록'))));
+    // 오늘 훈련을 실제로 끝낸 경우에만. 복습할 카드가 없어 그냥 들른 화면에서는 띄우지 않는다.
+    if (!nothing) adBreak('train');
   }
 
   build(false);

@@ -1,4 +1,4 @@
-# 구글 플레이 출시 절차 — 체스 복기왕
+# 구글 플레이 출시 + 광고 수익 절차 — 체스 복기왕
 
 앱 이름: **체스 복기왕** · 패키지: `com.bicyail.chessreview` · 버전 1.0.0 (versionCode 1)
 
@@ -8,98 +8,149 @@
 
 ---
 
-## 0. 지금 상태
+## 0. 지금 상태 (2026-07-29 폰에서 실제 확인)
 
 | 항목 | 상태 |
 |---|---|
-| 앱 코드 | ✅ 완성 · 전체 검사 통과 (`bash test/all.sh`) |
-| 안드로이드 래퍼·엔진 브리지 | ✅ 완성 (자바 타입 검사 통과) |
-| 엔진 바이너리 | ✅ `android/app/src/main/jniLibs/arm64-v8a/libstockfish.so` (77MB, git 제외) |
-| 빌드 파이프라인 (GitHub Actions) | ✅ 완성 (YAML 검증 완료) |
-| 아이콘·피처그래픽 | ✅ `store/icon-512.png`, `store/feature-1024x500.png` |
-| 등록 문구·개인정보처리방침 | ✅ `store/listing-ko.md`, `store/privacy-policy.html` |
-| git 저장소 | ✅ 커밋 완료 (`main` 브랜치, 아직 push 안 함) |
-| 기존 진도 이전 파일 | ✅ `/sdcard/체스퀴즈/복기왕-이전.json` (11판) |
+| 앱 코드 | ✅ 완성 · 검사 통과 (`bash test/all.sh`) |
+| 광고(AdMob) 연동 | ✅ 완성 — 지금은 **구글 테스트 광고 ID** (수익 0원, 계정정지 위험 0) |
+| 빌드 파이프라인 (GitHub Actions) | ✅ 완성 |
 | GitHub 저장소 | ✅ https://github.com/nataws88-ui/chess-review (public) |
-| 서명키 비밀값 | ✅ Actions secrets 4개 등록 완료 |
-| 개인정보처리방침 URL | ✅ https://nataws88-ui.github.io/chess-review/store/privacy-policy.html |
-| 스크린샷 | ⬜ 설치 후 실제 화면 촬영 (2장 이상) — **여기서부터 사람이 해야 함** |
-| 개발자 계정 | ⬜ (「임계 CRITICAL」과 공유) |
+| 개인정보처리방침 URL | ✅ https://nataws88-ui.github.io/chess-review/store/privacy-policy.html (광고 내용 반영됨) |
+| 아이콘·피처그래픽·문구 | ✅ `store/` |
+| **개발자 계정** | ✅ 있음 — `nataws88`, **개인 계정**, 계정 ID `5516547451542275367` ($25 결제 완료) |
+| ↳ 계정 확인(본인 인증) | ⬜ **미완료 → 앱을 만들 수 없는 상태** (1단계에서 해결) |
+| ↳ 등록된 앱 | 0개 |
+| **AdMob 계정** | ⬜ 미개설. 단 **애드센스 계정은 이미 있음** (`pub-3133219650005703`, 대한민국·개인·USD) → 연결만 하면 됨 |
+| 스크린샷 | ⬜ APK 설치 후 실제 화면 촬영 (2장 이상) |
+
+**남은 일은 전부 "사람이 구글 화면에서 눌러야 하는 것"입니다.** 순서대로 아래를 따라가세요.
 
 ---
 
-## 1. GitHub에 올리기 — 명령 하나
+## 1단계 · 개발자 계정 확인 완료 (제일 먼저, 이것 없으면 앱 생성 불가)
+
+Play Console 대시보드에 "앱을 게시하려면 개발자 계정 설정을 완료하세요" 배너가 있고,
+[앱 만들기] 버튼이 회색으로 잠겨 있습니다. 남은 항목은 **딱 두 개**입니다.
+
+1. **Android 휴대기기에 액세스할 수 있는지 확인**
+   - Play 스토어에서 **Google Play Console 앱**을 설치하고 같은 계정(`nataws88@gmail.com`)으로 로그인
+   - (이 폰에는 아직 설치돼 있지 않습니다)
+2. **연락처 전화번호 인증** — 신원 확인(신분증 승인)이 함께 걸려 있습니다
+   - Play Console → 왼쪽 메뉴 맨 아래 **설정 → 개발자 계정 → 계정 세부정보**
+   - 전화번호 인증 → SMS 코드 입력 → 필요하면 신분증(주민등록증/운전면허) 앞뒤 촬영 업로드
+   - 승인은 보통 당일 ~ 3일
+
+둘 다 초록색이 되면 배너가 사라지고 **[앱 만들기]** 가 눌립니다.
+
+---
+
+## 2단계 · AdMob 개설 + 실제 광고 ID 받기 (약 20분)
+
+애드센스 계정이 이미 있어서 결제·주소 입력이 생략됩니다.
+
+1. [apps.admob.com](https://apps.admob.com) 접속 → 나오는 **"이 계정으로 계속하시겠습니까?"** 화면에서
+   게시자 ID `pub-3133219650005703` 확인 후 **[계속]** → AdMob 약관 동의
+2. **앱 → 앱 추가**
+   - 플랫폼: **Android**
+   - "앱이 Google Play에 등록되어 있나요?" → 아직이면 **아니요** 선택하고 앱 이름 `체스 복기왕` 입력
+     (나중에 스토어에 올라간 뒤 AdMob에서 앱을 **연결**해 주면 됩니다 — 연결해야 리포트가 정확해집니다)
+   - 생성되면 **앱 ID**(`ca-app-pub-…~…`, 물결표 `~`)가 나옵니다
+3. **광고 단위 만들기 — 두 개**
+   - `배너` 형식 → 이름 예: `목록 배너` → 광고 단위 ID(`ca-app-pub-…/…`, 슬래시 `/`) 복사
+   - `전면 광고` 형식 → 이름 예: `분석 완료 전면` → 광고 단위 ID 복사
+4. **앱에 넣기** — 파일 한 개만 고칩니다: `android/app/src/main/res/values/admob.xml`
 
 ```bash
-gh auth login                     # 한 번만. 브라우저 인증
-bash tools/publish.sh             # 저장소 생성+push, 서명키 등록, Pages, 빌드 시작
+cd /root/chess-app
+# 아래 세 값을 받은 실제 ID로 바꿔 실행 (따옴표 안만 교체)
+APP_ID='ca-app-pub-실제~실제'
+BANNER='ca-app-pub-실제/실제'
+FULL='ca-app-pub-실제/실제'
+sed -i "s|ca-app-pub-3940256099942544~3347511713|$APP_ID|; \
+        s|ca-app-pub-3940256099942544/6300978111|$BANNER|; \
+        s|ca-app-pub-3940256099942544/1033173712|$FULL|; \
+        s|<bool name=\"admob_is_test\">true|<bool name=\"admob_is_test\">false|" \
+  android/app/src/main/res/values/admob.xml
+grep -n 'ca-app-pub\|admob_is_test' android/app/src/main/res/values/admob.xml   # 확인
+git add -A && git commit -m "실제 AdMob ID 적용" && git push
+gh workflow run "Build Android"
 ```
 
-`publish.sh` 가 하는 일:
-1. **public** 저장소 생성 + push (스톡피시 GPLv3 → 소스 공개 의무)
-2. 서명키를 Actions 비밀값 4개로 등록 (키 파일 자체는 절대 올라가지 않음)
-3. GitHub Pages 켜기 → 개인정보처리방침 URL 확보 (Play 필수 항목)
-4. 빌드 실행
+> 🚫 **실제 ID로 바꾼 뒤에는 내 광고를 절대 직접 누르지 마세요.** 무효 트래픽으로 계정이 정지됩니다.
+> 동작을 시험하려면 테스트 ID 버전(지금 상태)으로 확인하세요.
 
-<details><summary>수동으로 하려면</summary>
+> 💡 수익 지급은 **$100 이상** 쌓였을 때 다음 달 21일경 입금됩니다. 애드센스에 이미
+> 등록된 지급 정보를 그대로 씁니다. 첫 입금 전에 **주소 확인 PIN(우편 발송)** 이 요구될 수 있습니다.
+
+### (선택) app-ads.txt — 광고 단가 방어
+
+광고주가 "이 앱의 광고 재고가 진짜인지" 확인하는 파일입니다. 없으면 일부 고단가 광고가 안 붙습니다.
+AdMob → 앱 → 앱 설정에 표시된 개발자 웹사이트 도메인 루트에 `app-ads.txt` 를 두면 됩니다.
+GitHub Pages로 하려면 `nataws88-ui.github.io` 저장소를 새로 만들어 루트에 파일을 올립니다.
+급하지 않으니 출시 후에 해도 됩니다.
+
+---
+
+## 3단계 · 빌드 & 폰에서 실제 확인
 
 ```bash
-gh repo create chess-review --public --source=. --push
-gh secret set KEYSTORE_BASE64   < keystore/upload.jks.base64
-gh secret set KEYSTORE_PASSWORD < keystore/PASSWORD.txt
-printf upload | gh secret set KEY_ALIAS
-gh secret set KEY_PASSWORD      < keystore/PASSWORD.txt
+cd /root/chess-app
+gh workflow run "Build Android"     # 빌드 시작 (5~10분)
+gh run watch                        # 진행 보기
+gh run download -n apk-test        -D ~/chess-out    # 폰 설치용
+gh run download -n aab-play-upload -D ~/chess-out    # Play 업로드용
 ```
-</details>
 
-## 2. 빌드
+APK를 설치한 뒤 **반드시** 확인할 것:
 
-GitHub → **Actions → Build Android → Run workflow**
+1. 설정 → 앱 정보 → **[엔진 상태 확인]** → "엔진 정상: Stockfish 17.1"
+2. **경기 목록·통계·설정 화면 하단에 배너가 보이는가** (테스트 광고는 "Test Ad" 라고 표시됨)
+3. **체스판이 뜨는 화면(복기·훈련·대국)에는 배너가 없는가**
+4. 하단 탭바가 배너에 가려지지 않는가 · 상단 제목이 상태바에 겹치지 않는가
+5. 경기 하나를 분석 완료 → **전면광고가 한 번 뜨는가** (앱 켠 뒤 1분 이내면 안 뜨는 게 정상)
+6. 체스닷컴 아이디 입력창에 키보드를 올렸을 때 배너가 사라지는가
+7. 비행기 모드에서도 앱이 정상 동작하는가 (광고만 빠짐)
 
-- 워크플로가 스톡피시 arm64 바이너리(81MB)를 자동으로 내려받아 앱에 심습니다
-- 결과물: `aab-play-upload` (Play 업로드용), `apk-test` (폰에 직접 설치해 테스트)
-- 예상 용량: APK 약 80~85MB
+---
 
-### 먼저 APK로 실제 동작 확인 (중요)
-
-`apk-test` 를 내려받아 폰에 설치한 뒤 반드시 확인할 것:
-
-1. 앱 실행 → 설정 → 앱 정보 → **[엔진 상태 확인]** 이 "엔진 정상: Stockfish 17.1" 을 띄우는가
-   - 실패하면 엔진 실행이 막힌 것 → `useLegacyPackaging` 설정 확인
-2. 경기 가져오기 → 체스닷컴 아이디(`bicyail`) → 최근 경기 → 분석 완료되는가
-3. 체스닷컴 앱에서 PGN 공유 → 목록에 "체스 복기왕" 이 뜨는가
-4. 문제 풀기 → 화살표·승률이 나오는가
-5. 설정 → 가져오기 → `복기왕-이전.json` 으로 기존 진도가 넘어오는가
-
-## 3. Play Console 등록
+## 4단계 · Play Console 등록
 
 1. [play.google.com/console](https://play.google.com/console) → **앱 만들기**
-   - 이름: 체스 복기왕 / 한국어 / 앱 / 무료
-2. **앱 설정** 체크리스트
-   - 개인정보처리방침 URL: `store/privacy-policy.html` 을 GitHub Pages로 공개한 주소
-     (저장소 Settings → Pages → main 브랜치 → `/store` 폴더 지정)
-   - 광고 포함: **아니요**
-   - 데이터 보안: `store/listing-ko.md` 의 표대로 (수집·공유 모두 아니요)
-   - 콘텐츠 등급 설문 → 전체이용가
-   - 타겟층: 13세 이상
-3. **스토어 등록정보**
-   - 문구는 `store/listing-ko.md` 복사
-   - 아이콘 `store/icon-512.png`, 그래픽 `store/feature-1024x500.png`
-   - 스크린샷 2장 이상 (실제 화면 촬영)
-4. **비공개 테스트(closed testing)** 트랙에 AAB 업로드
+   - 이름 `체스 복기왕` / 기본 언어 한국어 / **앱** / **무료**
+2. **앱 콘텐츠(정책)** — 전부 채워야 출시 가능
+   | 항목 | 답 |
+   |---|---|
+   | 개인정보처리방침 | `https://nataws88-ui.github.io/chess-review/store/privacy-policy.html` |
+   | **광고** | **예, 앱에 광고가 포함되어 있습니다** ← 광고를 넣었으므로 반드시 예 |
+   | 앱 액세스 권한 | 모든 기능을 제한 없이 사용 가능 |
+   | 콘텐츠 등급 | 설문 → 폭력·성적·도박 전부 아니오 → 전체이용가 |
+   | 타겟층 | **13세 이상** (13세 미만을 포함하면 광고 정책이 훨씬 까다로워집니다) |
+   | 데이터 보안 | `store/listing-ko.md` 의 표대로 — **수집·공유 "예"** (광고 ID) |
+   | 정부 앱 / 금융 / 뉴스 | 아니요 |
+3. **스토어 등록정보** — 문구는 `store/listing-ko.md` 복사, 아이콘 `store/icon-512.png`,
+   그래픽 `store/feature-1024x500.png`, 스크린샷 2장 이상
+4. **테스트 → 비공개 테스트**에 `app-release.aab` 업로드 → Play 앱 서명 사용 **예**
 
-## 4. 프로덕션 승격 (개인 계정 필수 조건)
+> ⚠️ 데이터 보안 설문과 개인정보처리방침의 내용이 **어긋나면 반려**됩니다.
+> 광고를 넣은 지금은 "데이터 수집 없음"으로 답하면 안 됩니다.
 
-2023년 11월 이후에 만든 개인 개발자 계정은, 프로덕션 출시 권한을 얻으려면
+---
+
+## 5단계 · 프로덕션 승격 (개인 계정 필수 조건)
+
+개인 개발자 계정은 프로덕션 출시 권한을 얻으려면
 **테스터 12명 이상이 연속 14일간 비공개 테스트에 참여**해야 합니다.
 
 - 이 조건은 **계정 단위로 한 번** 통과하면 됩니다.
-  → 「임계 CRITICAL」로 이미 진행 중이라면, 그게 끝나는 시점에 이 앱도 바로 프로덕션 신청 가능
-- 아직이라면 두 앱을 **같은 테스터 그룹**으로 동시에 돌리는 게 가장 빠릅니다
-  (테스터에게 앱 2개를 함께 안내)
-- 최종 기준은 Play Console 안내를 따르세요 (구글 정책은 바뀔 수 있습니다)
+- 「임계 CRITICAL」(/root/critical)도 같은 계정입니다 → **두 앱을 같은 테스터 그룹으로 동시에** 돌리면
+  한 번의 14일로 둘 다 해결됩니다. 가장 빠른 길입니다.
+- 테스터에게 반드시 안내할 것: ① 초대 링크로 **설치까지** 할 것 ② 14일간 지우지 말 것
+  ③ 링크를 연 계정 = 폰에 로그인된 구글 계정이어야 함
 
-## 5. 업데이트할 때
+---
+
+## 6단계 · 업데이트할 때
 
 ```
 android/app/build.gradle 에서
@@ -110,12 +161,27 @@ android/app/build.gradle 에서
 
 ---
 
+## 광고 구조 (고칠 때 볼 곳)
+
+| 무엇 | 어디 |
+|---|---|
+| 광고 ID 3개 · 테스트 여부 | `android/app/src/main/res/values/admob.xml` |
+| 배너/전면광고 규칙 (간격 3분, 시작 1분 유예, 전체이용가 등급 제한) | `android/app/src/main/java/com/bicyail/chessreview/Ads.java` |
+| 어느 화면에서 배너를 숨길지 | `www/js/ui.js` 의 `BOARD_ROUTES` |
+| 전면광고 호출 지점 | `www/js/views/import.js`(분석 완료), `www/js/views/train.js`(훈련 완료) |
+| 배너 높이만큼 화면 밀어주기 | `MainActivity.pushInsets()` → CSS `--ad-h` (`www/css/app.css`) |
+
+---
+
 ## 문제가 생기면
 
 | 증상 | 원인 / 해결 |
 |---|---|
-| 앱은 켜지는데 "엔진 파일을 찾을 수 없습니다" | jniLibs에 `libstockfish.so` 가 안 들어감 → CI 로그의 "스톡피시 엔진 내려받기" 단계 확인 |
-| "Permission denied" 로 엔진 실행 실패 | `packaging { jniLibs { useLegacyPackaging = true } }` 가 빠졌는지 확인 (없으면 .so가 파일로 안 풀림) |
-| 화면이 하얗게만 뜸 | WebView 자산 경로 문제 → `adb logcat | grep chromium` 으로 404 확인 |
+| 앱이 켜지자마자 죽는다 (광고 추가 후) | `admob.xml` 의 `admob_app_id` 형식 오류. 앱 ID는 `~`, 광고 단위는 `/` 입니다 |
+| 배너가 안 보인다 | ① 인터넷 확인 ② 실제 ID는 생성 직후 최대 1시간 광고가 안 나올 수 있음 ③ `adb logcat | grep -i ads` |
+| 전면광고가 안 뜬다 | 정상일 수 있음 — 앱 시작 1분 이내이거나 이전 광고 후 3분이 안 지났으면 건너뜁니다 |
+| 광고 때문에 판이 작아졌다 | 판 화면에는 배너를 안 붙입니다. 붙었다면 `BOARD_ROUTES` 정규식 확인 |
+| "엔진 파일을 찾을 수 없습니다" | jniLibs에 `libstockfish.so` 누락 → CI "스톡피시 엔진 내려받기" 단계 확인 |
+| "Permission denied" 로 엔진 실행 실패 | `packaging { jniLibs { useLegacyPackaging = true } }` 확인 |
 | Play 업로드 시 "서명 키가 다름" | CRITICAL과 같은 키인지 확인 (`keytool -list -v -keystore keystore/upload.jks`) |
-| AAB가 너무 크다는 경고 | 엔진 NNUE 데이터 때문. 200MB 한도 안이라 문제없음 |
+| 심사에서 데이터 보안 불일치 반려 | 방침 2항 = 데이터 보안 설문 = 실제 SDK 가 일치해야 함 |

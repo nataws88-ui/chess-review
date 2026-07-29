@@ -103,6 +103,37 @@ public class NativeBridge {
         return s;
     }
 
+    // ---------------- 광고 ----------------
+
+    /** 화면이 바뀔 때마다 부른다. 체스판이 뜨는 화면에서는 false → 배너를 내린다. */
+    @JavascriptInterface
+    public void adBanner(boolean show) {
+        if (a.ads != null) a.ads.showBanner(show);
+    }
+
+    /** 분석 완료·훈련 완료처럼 사용자가 이미 멈춘 순간에만 부른다(간격 제한은 네이티브가 판단). */
+    @JavascriptInterface
+    public void adInterstitial(String reason) {
+        if (a.ads != null) a.ads.maybeShowFull();
+    }
+
+    /** 유럽(EEA/영국) 사용자에게만 필요한 "광고 개인정보 옵션" 버튼을 보일지 */
+    @JavascriptInterface
+    public boolean adPrivacyRequired() {
+        return a.ads != null && a.ads.privacyOptionsRequired();
+    }
+
+    @JavascriptInterface
+    public void adPrivacyOptions() {
+        if (a.ads != null) a.ads.showPrivacyOptions();
+    }
+
+    /** 아직 구글 테스트 광고 ID 를 쓰고 있는지 (설정 화면 안내용) */
+    @JavascriptInterface
+    public boolean adTestMode() {
+        try { return a.getResources().getBoolean(R.bool.admob_is_test); } catch (Throwable t) { return false; }
+    }
+
     // ---------------- 잡기능 ----------------
 
     @JavascriptInterface

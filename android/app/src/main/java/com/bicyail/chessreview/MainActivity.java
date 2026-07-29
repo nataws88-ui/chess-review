@@ -3,15 +3,18 @@ package com.bicyail.chessreview;
 import android.app.Activity;
 import android.content.Intent;
 import android.graphics.Color;
+import android.graphics.Insets;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.view.View;
+import android.view.WindowInsets;
 import android.view.WindowManager;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.widget.FrameLayout;
 import android.widget.Toast;
 
 import androidx.webkit.WebSettingsCompat;
@@ -39,7 +42,12 @@ public class MainActivity extends Activity {
 
     WebView web;
     Engine engine;
+    Ads ads;
     private WebViewAssetLoader assetLoader;
+    private FrameLayout adHolder;
+
+    /** 시스템 바 인셋(px)과 배너 높이(px) — 웹앱 CSS 변수로 내려준다 */
+    private int insTopPx, insBottomPx, adHeightPx;
 
     /** 공유·파일열기로 들어온 PGN 텍스트. 웹앱이 준비되면 가져간다. */
     String pendingShare = null;
@@ -57,7 +65,43 @@ public class MainActivity extends Activity {
 
         web = new WebView(this);
         web.setBackgroundColor(Color.parseColor("#0e1116"));
-        setContentView(web);
+
+        // [화면 구조] 웹앱이 화면 전체를 쓰고, 배너는 그 위에 얹는다.
+        // 배너가 차지하는 높이는 CSS 변수(--ad-h)로 웹앱에 알려주므로
+        // 하단 탭바가 배너에 가려지지 않는다.
+        FrameLayout root = new FrameLayout(this);
+        root.setBackgroundColor(Color.parseColor("#0e1116"));
+        root.addView(web, new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+        adHolder = new FrameLayout(this);
+        adHolder.setBackgroundColor(Color.parseColor("#0e1116"));
+        FrameLayout.LayoutParams adLp = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT);
+        adLp.gravity = android.view.Gravity.BOTTOM;
+        root.addView(adHolder, adLp);
+        setContentView(root);
+
+        // Android 15+ 는 화면 끝까지 그리는 것이 강제된다(상태바/내비바 뒤로 내용이 깔린다).
+        // API 30 이상에서는 우리가 직접 인셋을 다뤄 CSS 변수로 내려주고,
+        // API 26~29 는 시스템이 알아서 여백을 잡아주므로 0으로 둔다.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            getWindow().setDecorFitsSystemWindows(false);
+            getWindow().setStatusBarColor(Color.TRANSPARENT);
+            getWindow().setNavigationBarColor(Color.TRANSPARENT);
+            root.setOnApplyWindowInsetsListener((v, insets) -> {
+                Insets bars = insets.getInsets(
+                        WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout());
+                int imeBottom = insets.getInsets(WindowInsets.Type.ime()).bottom;
+                insTopPx = bars.top;
+                insBottomPx = bars.bottom;
+                // 키보드가 올라오면 그만큼 화면을 밀어 올린다(입력칸이 가려지지 않게)
+                v.setPadding(0, 0, 0, Math.max(0, imeBottom - insBottomPx));
+                adHolder.setPadding(0, 0, 0, imeBottom > 0 ? 0 : insBottomPx);
+                if (ads != null) ads.setKeyboardUp(imeBottom > 0);
+                pushInsets();
+                return insets;
+            });
+        }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG);
@@ -101,6 +145,7 @@ public class MainActivity extends Activity {
             @Override
             public void onPageFinished(WebView v, String url) {
                 pageReady = true;
+                pushInsets();
                 deliverShare();
             }
         });
@@ -117,6 +162,9 @@ public class MainActivity extends Activity {
 
         web.addJavascriptInterface(new NativeBridge(this), "Native");
 
+        ads = new Ads(this, adHolder);
+        ads.start();
+
         takeShare(getIntent());
         web.loadUrl(ORIGIN + "/assets/index.html");
     }
@@ -130,8 +178,21 @@ public class MainActivity extends Activity {
     }
 
     @Override
+    protected void onPause() {
+        if (ads != null) ads.onPause();
+        super.onPause();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (ads != null) ads.onResume();
+    }
+
+    @Override
     protected void onDestroy() {
         if (engine != null) engine.stop();
+        if (ads != null) ads.onDestroy();
         super.onDestroy();
     }
 
@@ -139,6 +200,33 @@ public class MainActivity extends Activity {
     public void onBackPressed() {
         if (web != null && web.canGoBack()) web.goBack();
         else super.onBackPressed();
+    }
+
+    // ---------------- 여백(인셋)·배너 높이를 웹앱에 알려주기 ----------------
+
+    /** 배너가 보이는/사라진 높이(px). Ads 가 부른다. */
+    void setAdHeight(int px) {
+        adHeightPx = px;
+        pushInsets();
+    }
+
+    /**
+     * 상태바 높이·하단 여백·배너 높이를 CSS 변수로 내려준다.
+     * 배너가 떠 있는 동안에는 배너 영역이 하단 여백까지 덮으므로 --safe-b 를 0 으로 만든다.
+     */
+    private void pushInsets() {
+        if (!pageReady || web == null) return;
+        float d = getResources().getDisplayMetrics().density;
+        if (d <= 0) d = 1f;
+        boolean adOn = adHeightPx > 0;
+        float safeT = insTopPx / d;
+        float safeB = (adOn ? 0 : insBottomPx) / d;
+        float adH = adOn ? (adHeightPx + insBottomPx) / d : 0;
+        js("(function(r){"
+                + "r.setProperty('--safe-t','" + safeT + "px');"
+                + "r.setProperty('--safe-b','" + safeB + "px');"
+                + "r.setProperty('--ad-h','" + adH + "px');"
+                + "})(document.documentElement.style)");
     }
 
     // ---------------- 공유·파일 열기로 들어온 PGN ----------------

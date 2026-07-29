@@ -109,6 +109,26 @@ export async function view(app) {
       h('div.stat', h('div.k', '훈련 카드'), h('div.v', Object.keys(srs).length)),
       h('div.stat', h('div.k', '용량'), h('div.v', approxSize(games))))));
 
+  /* ---- 광고 ---- */
+  if (isApp) {
+    const adCard = h('div.card',
+      h('h3', '광고'),
+      h('p.sub', '앱을 무료로 유지하기 위한 광고입니다. 경기 목록·통계·설정 화면에만 하단 배너가 붙고, '
+        + '체스판이 뜨는 화면에는 광고가 없습니다. 분석이나 훈련을 마친 뒤에만 전면 광고가 잠깐 나옵니다.'));
+    try {
+      if (Native.adTestMode && Native.adTestMode()) {
+        adCard.appendChild(h('p.sub.mt', { style: 'color:var(--gold)' },
+          '⚠️ 지금은 테스트 광고입니다 (수익 0원). 실제 광고 ID로 바꾸면 사라지는 안내입니다.'));
+      }
+      if (Native.adPrivacyRequired && Native.adPrivacyRequired()) {
+        adCard.appendChild(h('button.btn.wide.mt', {
+          onclick: () => Native.adPrivacyOptions(),
+        }, '광고 개인정보 설정'));
+      }
+    } catch (e) {}
+    b.appendChild(adCard);
+  }
+
   b.appendChild(h('button.card.tap', { onclick: () => nav('/about') },
     h('div.row', h('b', { style: 'flex:1' }, 'ℹ️ 앱 정보 · 오픈소스 라이선스'), h('span.dim', '›'))));
 
@@ -192,7 +212,7 @@ export async function about(app) {
   b.appendChild(h('div.card',
     h('h3', '♟️ 체스 복기왕'),
     h('p.sub', `버전 ${ver}`),
-    h('p.sub.mt', '내가 둔 경기를 엔진으로 분석해 실수를 문제로 만들고, 안키식 간격 반복으로 복습하는 앱입니다. 인터넷 연결은 체스닷컴에서 경기를 가져올 때만 씁니다.')));
+    h('p.sub.mt', '내가 둔 경기를 엔진으로 분석해 실수를 문제로 만들고, 안키식 간격 반복으로 복습하는 앱입니다. 인터넷은 체스닷컴에서 경기를 가져올 때와 광고를 받을 때만 씁니다.')));
 
   b.appendChild(h('div.card',
     h('h3', '엔진'),

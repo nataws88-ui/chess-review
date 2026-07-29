@@ -1,6 +1,6 @@
 /* 경기 가져오기 — Chess.com / 붙여넣기 / 파일 / 공유받기 */
 
-import { h, nav, screen, toast, progressBar, httpGet, pickFile, keepAwake, isApp, play } from '../ui.js';
+import { h, nav, screen, toast, progressBar, httpGet, pickFile, keepAwake, isApp, play, adBreak } from '../ui.js';
 import { settings, setSetting, store } from '../store.js';
 import { splitPgn, peek, analyzeAndSave, fingerprint, chessComUrl, invalidate } from '../games.js';
 import { resultKo } from '../quizgen.js';
@@ -176,6 +176,7 @@ export async function view(app) {
       play('win', st2.sound);
       toast(`${added}판 분석 완료`);
       nav('/');
+      adBreak('analysis');   // 분석이 끝나 손을 놓은 순간 — 광고를 넣기에 가장 덜 방해되는 지점
     } catch (e) {
       if (signal.cancelled) {
         toast(added ? `${added}판까지 저장하고 중단했습니다` : '취소했습니다');

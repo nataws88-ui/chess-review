@@ -1,9 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- Chess.com 경기 가져오기에만 사용. 그 외 통신 없음 -->
+    <!-- Chess.com 경기 가져오기 + 광고 수신에 사용 -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- 광고 식별자(AdMob). 광고를 넣으면 Play 정책상 이 권한을 선언해야 한다 -->
+    <uses-permission android:name="com.google.android.gms.permission.AD_ID" />
 
     <application
         android:allowBackup="true"
@@ -16,6 +18,19 @@
         android:hardwareAccelerated="true"
         android:enableOnBackInvokedCallback="false"
         android:theme="@style/AppTheme">
+
+        <!-- AdMob 앱 ID. 실제 값은 res/values/admob.xml 에서 바꾼다.
+             이 값이 없거나 형식이 틀리면 앱이 시작과 동시에 죽는다. -->
+        <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="@string/admob_app_id" />
+        <!-- 광고 SDK 초기화·로딩을 첫 화면 표시와 겹치지 않게 해 시작을 빠르게 -->
+        <meta-data
+            android:name="com.google.android.gms.ads.flag.OPTIMIZE_INITIALIZATION"
+            android:value="true" />
+        <meta-data
+            android:name="com.google.android.gms.ads.flag.OPTIMIZE_AD_LOADING"
+            android:value="true" />
 
         <activity
             android:name=".MainActivity"

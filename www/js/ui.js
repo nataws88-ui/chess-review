@@ -72,6 +72,7 @@ export function nav(path, replace = false) {
 export async function dispatch() {
   const path = (location.hash || '#/').slice(1) || '/';
   const app = $('app');
+  adBanner(path);
   for (const r of routes) {
     const m = r.rx.exec(path);
     if (!m) continue;
@@ -122,6 +123,22 @@ export function haptic(on = true) {
 
 export function keepAwake(on) {
   try { Native && Native.keepAwake(!!on); } catch (e) {}
+}
+
+/* ---------------- 광고 ----------------
+ * 체스판이 뜨는 화면에서는 배너를 내린다 — 판 크기를 한 픽셀도 양보하지 않는다.
+ * 전면광고는 "분석 완료"처럼 사용자가 이미 손을 멈춘 순간에만 부르고,
+ * 실제로 띄울지(간격·준비 여부)는 네이티브가 판단한다. */
+
+const BOARD_ROUTES = [/^\/game\//, /^\/train/, /^\/spar/];
+
+export function adBanner(path) {
+  const show = !BOARD_ROUTES.some((rx) => rx.test(path));
+  try { Native && Native.adBanner && Native.adBanner(show); } catch (e) {}
+}
+
+export function adBreak(reason) {
+  try { Native && Native.adInterstitial && Native.adInterstitial(String(reason || '')); } catch (e) {}
 }
 
 /** 네이티브 HTTP GET (CORS 우회). 앱이 아니면 fetch로 시도 */
