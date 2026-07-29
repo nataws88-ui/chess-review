@@ -59,23 +59,19 @@ Play Console 대시보드에 "앱을 게시하려면 개발자 계정 설정을 
 3. **광고 단위 만들기 — 두 개**
    - `배너` 형식 → 이름 예: `목록 배너` → 광고 단위 ID(`ca-app-pub-…/…`, 슬래시 `/`) 복사
    - `전면 광고` 형식 → 이름 예: `분석 완료 전면` → 광고 단위 ID 복사
-4. **앱에 넣기** — 파일 한 개만 고칩니다: `android/app/src/main/res/values/admob.xml`
+4. **앱에 넣기** — 받은 ID 3개를 그대로 넘기면 끝입니다 (형식이 틀리면 스크립트가 막아줍니다)
 
 ```bash
 cd /root/chess-app
-# 아래 세 값을 받은 실제 ID로 바꿔 실행 (따옴표 안만 교체)
-APP_ID='ca-app-pub-실제~실제'
-BANNER='ca-app-pub-실제/실제'
-FULL='ca-app-pub-실제/실제'
-sed -i "s|ca-app-pub-3940256099942544~3347511713|$APP_ID|; \
-        s|ca-app-pub-3940256099942544/6300978111|$BANNER|; \
-        s|ca-app-pub-3940256099942544/1033173712|$FULL|; \
-        s|<bool name=\"admob_is_test\">true|<bool name=\"admob_is_test\">false|" \
-  android/app/src/main/res/values/admob.xml
-grep -n 'ca-app-pub\|admob_is_test' android/app/src/main/res/values/admob.xml   # 확인
+bash tools/set_admob.sh '앱ID(~)' '배너ID(/)' '전면광고ID(/)'
+# 예: bash tools/set_admob.sh ca-app-pub-3133219650005703~1234567890 \
+#        ca-app-pub-3133219650005703/1111111111 ca-app-pub-3133219650005703/2222222222
+
 git add -A && git commit -m "실제 AdMob ID 적용" && git push
-gh workflow run "Build Android"
+gh workflow run "Build Android" && gh run watch
 ```
+
+바뀌는 파일은 `android/app/src/main/res/values/admob.xml` 하나뿐입니다(직접 손으로 고쳐도 됩니다).
 
 > 🚫 **실제 ID로 바꾼 뒤에는 내 광고를 절대 직접 누르지 마세요.** 무효 트래픽으로 계정이 정지됩니다.
 > 동작을 시험하려면 테스트 ID 버전(지금 상태)으로 확인하세요.
