@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 복기'왕' — 금관 + 체스판 받침. 적응형 아이콘 안전영역(중앙 66dp) 안에 들어오게 그림 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- 관 몸통 -->
+    <path android:pathData="M31,70 L31,39 L42.5,51 L54,32 L65.5,51 L77,39 L77,70 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="31" android:startY="32"
+                android:endX="77" android:endY="70"
+                android:type="linear">
+                <item android:offset="0" android:color="#FFFFE08A" />
+                <item android:offset="0.5" android:color="#FFF2C14E" />
+                <item android:offset="1" android:color="#FFD99A2B" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- 관 보석 -->
+    <path android:fillColor="#FF7A4F12"
+        android:pathData="M54,45 m-3.2,0 a3.2,3.2 0 1,0 6.4,0 a3.2,3.2 0 1,0 -6.4,0" />
+    <path android:fillColor="#FF7A4F12"
+        android:pathData="M36.5,52 m-2.4,0 a2.4,2.4 0 1,0 4.8,0 a2.4,2.4 0 1,0 -4.8,0" />
+    <path android:fillColor="#FF7A4F12"
+        android:pathData="M71.5,52 m-2.4,0 a2.4,2.4 0 1,0 4.8,0 a2.4,2.4 0 1,0 -4.8,0" />
+
+    <!-- 체스판 받침: 밝은 칸 -->
+    <path android:fillColor="#FFF0D9B5"
+        android:pathData="M28,71 L80,71 L80,80 L28,80 Z" />
+    <!-- 체스판 받침: 어두운 칸 (교차) -->
+    <path android:fillColor="#FF7C9E58"
+        android:pathData="M28,71 L41,71 L41,80 L28,80 Z M54,71 L67,71 L67,80 L54,80 Z" />
+</vector>

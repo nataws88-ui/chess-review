@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>체스 복기왕 — 개인정보 처리방침</title>
+<style>
+body{max-width:720px;margin:0 auto;padding:28px 18px 60px;line-height:1.75;
+  font-family:system-ui,-apple-system,'Noto Sans KR',sans-serif;color:#1a1d22;background:#fff}
+h1{font-size:1.5rem;margin-bottom:4px}
+h2{font-size:1.1rem;margin:26px 0 8px;padding-top:14px;border-top:1px solid #e5e7eb}
+.date{color:#6b7280;font-size:.9rem;margin-bottom:18px}
+ul{padding-left:20px}
+li{margin:5px 0}
+.box{background:#f3f6f9;border-left:4px solid #4ADE80;padding:12px 14px;border-radius:6px;margin:14px 0}
+code{background:#f1f3f5;padding:1px 5px;border-radius:4px;font-size:.9em}
+@media (prefers-color-scheme:dark){
+  body{background:#111418;color:#e5e9f0}
+  .box{background:#1a1f27;border-left-color:#4ADE80}
+  h2{border-top-color:#2a3038}
+  code{background:#20262e}
+  .date{color:#9aa4b2}
+}
+</style>
+</head>
+<body>
+<h1>개인정보 처리방침</h1>
+<p class="date">앱: 체스 복기왕 (com.bicyail.chessreview) · 최종 수정: 2026년 7월 29일</p>
+
+<div class="box">
+<b>요약: 이 앱은 개인정보를 수집하지 않습니다.</b><br>
+계정도, 서버도 없습니다. 모든 기록은 사용자의 기기 안에만 저장됩니다.
+</div>
+
+<h2>1. 수집하는 정보</h2>
+<p><b>없습니다.</b> 개발자는 사용자의 어떤 정보도 수집·전송·저장하지 않습니다.
+분석 도구(애널리틱스), 광고 SDK, 크래시 리포트 수집기를 일절 포함하지 않습니다.</p>
+
+<h2>2. 기기에 저장되는 것</h2>
+<p>다음 정보는 <b>기기 내부 저장소에만</b> 보관되며 외부로 나가지 않습니다.</p>
+<ul>
+  <li>사용자가 추가한 체스 경기 기록(PGN)과 그 엔진 분석 결과</li>
+  <li>문제 풀이·복습 진도(간격 반복 일정)</li>
+  <li>앱 설정(아이디, 판 색, 소리 등)</li>
+</ul>
+<p>앱을 삭제하면 함께 지워집니다. 앱 안의 <code>설정 → 전체 데이터 삭제</code> 로 직접 지울 수도 있습니다.</p>
+
+<h2>3. 네트워크 사용</h2>
+<p>이 앱이 인터넷을 쓰는 경우는 <b>단 하나</b>입니다.</p>
+<ul>
+  <li>사용자가 체스닷컴 아이디를 직접 입력하고 [최근 경기 불러오기]를 눌렀을 때,
+      Chess.com의 <b>공개 API</b>(<code>https://api.chess.com/pub/player/…</code>)에 그 아이디로 조회 요청을 보냅니다.</li>
+</ul>
+<p>이때 전송되는 것은 사용자가 입력한 공개 아이디뿐입니다. 로그인 정보나 비밀번호는
+요구하지도, 다루지도 않습니다. 해당 요청은 Chess.com의 개인정보 처리방침을 따릅니다.</p>
+<p>그 밖의 모든 기능(엔진 분석, 문제 풀이, 대국, 통계)은 <b>완전히 오프라인</b>으로 동작합니다.</p>
+
+<h2>4. 권한</h2>
+<ul>
+  <li><code>INTERNET</code> — 위 3항의 경기 가져오기에만 사용</li>
+  <li>파일 접근 — 사용자가 직접 파일을 고를 때만(백업 가져오기/내보내기), 시스템 파일 선택기를 통해서만 접근합니다</li>
+</ul>
+
+<h2>5. 아동 개인정보</h2>
+<p>이 앱은 아동을 포함한 누구의 개인정보도 수집하지 않습니다.</p>
+
+<h2>6. 오픈소스</h2>
+<p>이 앱은 GPLv3로 배포되며 전체 소스 코드가 공개되어 있습니다.
+포함된 구성요소: Stockfish 17.1 (GPLv3), chess.js (BSD 2-Clause),
+체스 기물 이미지 (Colin M.L. Burnett, GFDL/BSD/GPL).</p>
+
+<h2>7. 변경 안내</h2>
+<p>방침이 바뀌면 이 페이지에서 수정일과 함께 공지합니다.</p>
+
+<h2>8. 문의</h2>
+<p>nataws88@gmail.com</p>
+</body>
+</html>

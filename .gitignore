@@ -1,0 +1,20 @@
+# 엔진 바이너리(81MB) — 빌드할 때 내려받는다 (tools/fetch_engine.sh, CI)
+android/app/src/main/jniLibs/
+www/assets/stockfish-COPYING.txt
+
+# 서명 키 — 절대 올리지 말 것 (잃으면 앱 업데이트 영구 불가)
+keystore/
+
+# 빌드 산출물
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+*.apk
+*.aab
+
+# 잡파일
+.DS_Store
+node_modules/
+__pycache__/
+*.pyc

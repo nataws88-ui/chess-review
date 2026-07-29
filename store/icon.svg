@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#243040"/>
+      <stop offset="0.55" stop-color="#1B2431"/>
+      <stop offset="1" stop-color="#121821"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0.15" y1="0" x2="0.85" y2="1">
+      <stop offset="0" stop-color="#FFE9A6"/>
+      <stop offset="0.45" stop-color="#F2C14E"/>
+      <stop offset="1" stop-color="#CF9421"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.32" r="0.6">
+      <stop offset="0" stop-color="#F2C14E" stop-opacity="0.30"/>
+      <stop offset="1" stop-color="#F2C14E" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="sh" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#000" flood-opacity="0.45"/>
+    </filter>
+  </defs>
+
+  <rect width="512" height="512" fill="url(#bg)"/>
+  <circle cx="256" cy="196" r="215" fill="url(#glow)"/>
+
+  <g filter="url(#sh)">
+    <!-- 왕관 -->
+    <path d="M120 342 L120 158 L192 234 L256 112 L320 234 L392 158 L392 342 Z" fill="url(#gold)"/>
+    <!-- 왕관 보석 -->
+    <circle cx="256" cy="192" r="19" fill="#7A4F12" opacity="0.85"/>
+    <circle cx="154" cy="238" r="13" fill="#7A4F12" opacity="0.85"/>
+    <circle cx="358" cy="238" r="13" fill="#7A4F12" opacity="0.85"/>
+    <!-- 체스판 받침 -->
+    <rect x="100" y="352" width="312" height="60" rx="8" fill="#F0D9B5"/>
+    <path d="M100 352 h78 v60 h-78 z M256 352 h78 v60 h-78 z" fill="#7FA650"/>
+    <rect x="100" y="352" width="312" height="60" rx="8" fill="none" stroke="#0E1116" stroke-width="5" stroke-opacity="0.45"/>
+  </g>
+</svg>

@@ -1,0 +1,81 @@
+plugins { id 'com.android.application' }
+
+// 서명 정보는 환경변수(CI) 또는 gradle.properties(로컬)에서 읽는다.
+def ksPath = System.getenv("KEYSTORE_PATH") ?: project.findProperty("KEYSTORE_PATH")
+def ksPass = System.getenv("KEYSTORE_PASSWORD") ?: project.findProperty("KEYSTORE_PASSWORD")
+def kAlias = System.getenv("KEY_ALIAS") ?: project.findProperty("KEY_ALIAS")
+def kPass  = System.getenv("KEY_PASSWORD") ?: project.findProperty("KEY_PASSWORD")
+def hasSigning = ksPath != null && file(ksPath).exists()
+
+android {
+    namespace 'com.bicyail.chessreview'
+    compileSdk 36
+
+    defaultConfig {
+        applicationId "com.bicyail.chessreview"
+        minSdk 26          // Android 8.0+
+        targetSdk 36       // Play 필수: Android 16
+        versionCode 1
+        versionName "1.0.0"
+        // 스톡피시는 arm64 네이티브 바이너리 하나만 넣는다(2026년 기준 사실상 전 기기)
+        ndk { abiFilters 'arm64-v8a' }
+    }
+
+    // 웹 앱 본체(www/)를 그대로 assets로 사용 — 복사 단계가 없다.
+    sourceSets {
+        main {
+            assets.srcDirs = ['src/main/assets', '../../www']
+            jniLibs.srcDirs = ['src/main/jniLibs']
+        }
+    }
+
+    // ★ 매우 중요 ★
+    // 기본값(false)이면 .so가 APK 안에 압축된 채로 남아 파일로 존재하지 않는다.
+    // 스톡피시는 "실행"해야 하므로 반드시 설치 시 파일로 풀리게 해야 한다.
+    packaging {
+        jniLibs { useLegacyPackaging = true }
+    }
+
+    if (hasSigning) {
+        signingConfigs {
+            release {
+                storeFile file(ksPath)
+                storePassword ksPass
+                keyAlias kAlias
+                keyPassword kPass
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            if (hasSigning) signingConfig signingConfigs.release
+        }
+        debug {
+            applicationIdSuffix ".debug"
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    // BuildConfig.DEBUG / VERSION_NAME 를 자바에서 쓰므로 AGP 8에서는 명시적으로 켜야 한다.
+    buildFeatures { buildConfig true }
+
+    bundle { language { enableSplit false } }
+
+    lint {
+        abortOnError false
+        checkReleaseBuilds false
+    }
+}
+
+dependencies {
+    // WebViewAssetLoader(로컬 파일을 https 오리진처럼 제공) + 강제 다크모드 차단
+    implementation 'androidx.webkit:webkit:1.12.1'
+}
