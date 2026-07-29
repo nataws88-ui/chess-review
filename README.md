@@ -90,11 +90,20 @@ test/                   헤드리스 테스트 (실제 엔진으로 종단 검�
 ## 개발
 
 ```bash
+bash test/all.sh           # 전체 검사 (아래 5가지를 한 번에)
+  node test/smoke.mjs      #   모듈 적재 — 문법·import
+  bash test/javacheck.sh   #   안드로이드 자바 타입 검사 (API 스텁 컴파일)
+  node test/run.mjs        #   실제 스톡피시로 종단 (분석→문제→기존 데이터 이전)
+  node test/views.mjs      #   모든 화면 렌더 + 문제 풀이 동작 시뮬레이션
+  node test/preview.mjs    #   판 렌더 결과를 PNG 로 (test/preview/)
+
 ./serve.sh                 # 브라우저 미리보기 (엔진 빼고 화면 확인)
-node test/smoke.mjs        # 모듈 적재 점검
-node test/run.mjs          # 실제 스톡피시로 종단 테스트 (46개)
 bash tools/fetch_engine.sh # 엔진 바이너리 준비 (로컬 빌드용)
+bash tools/publish.sh      # GitHub 올리기 + 서명키 + Pages + 빌드 (gh auth login 후)
 ```
+
+> 안드로이드 SDK는 x86_64 전용이라 이 폰(arm64)에서는 APK를 만들 수 없습니다.
+> 그래서 빌드는 GitHub Actions에서 하고, 대신 위 검사들로 설치 전에 최대한 잡습니다.
 
 빌드는 GitHub Actions에서 합니다 → [PLAYSTORE.md](PLAYSTORE.md)
 

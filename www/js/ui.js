@@ -3,10 +3,14 @@
 export const $ = (id) => document.getElementById(id);
 export const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
 
-/** h('div.card', {onclick}, '내용') */
+/** h('div.card', {onclick}, '내용') · h('div#toast.toast') 처럼 id 도 붙일 수 있다 */
 export function h(spec, props, ...children) {
-  const [tag, ...cls] = String(spec).split('.');
-  const e = document.createElement(tag || 'div');
+  const m = /^([a-zA-Z][a-zA-Z0-9]*)?(?:#([\w-]+))?((?:\.[\w-]+)*)$/.exec(String(spec)) || [];
+  const tag = m[1] || 'div';
+  const id = m[2];
+  const cls = (m[3] || '').split('.').filter(Boolean);
+  const e = document.createElement(tag);
+  if (id) e.id = id;
   if (cls.length) e.className = cls.join(' ');
   if (props && (typeof props !== 'object' || Array.isArray(props) || props.nodeType)) {
     children.unshift(props);

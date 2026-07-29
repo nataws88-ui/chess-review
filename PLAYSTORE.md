@@ -12,35 +12,43 @@
 
 | 항목 | 상태 |
 |---|---|
-| 앱 코드 | ✅ 완성 (테스트 49개 통과) |
-| 안드로이드 래퍼·엔진 브리지 | ✅ 완성 |
-| 빌드 파이프라인 (GitHub Actions) | ✅ 완성 |
+| 앱 코드 | ✅ 완성 · 전체 검사 통과 (`bash test/all.sh`) |
+| 안드로이드 래퍼·엔진 브리지 | ✅ 완성 (자바 타입 검사 통과) |
+| 엔진 바이너리 | ✅ `android/app/src/main/jniLibs/arm64-v8a/libstockfish.so` (77MB, git 제외) |
+| 빌드 파이프라인 (GitHub Actions) | ✅ 완성 (YAML 검증 완료) |
 | 아이콘·피처그래픽 | ✅ `store/icon-512.png`, `store/feature-1024x500.png` |
 | 등록 문구·개인정보처리방침 | ✅ `store/listing-ko.md`, `store/privacy-policy.html` |
-| 스크린샷 | ⬜ 설치 후 실제 화면 촬영 필요 (2장 이상) |
+| git 저장소 | ✅ 커밋 완료 (`main` 브랜치, 아직 push 안 함) |
+| 기존 진도 이전 파일 | ✅ `/sdcard/체스퀴즈/복기왕-이전.json` (11판) |
+| **GitHub 로그인** | ⬜ `gh auth login` — **여기서부터 사람이 해야 함** |
+| 스크린샷 | ⬜ 설치 후 실제 화면 촬영 (2장 이상) |
 | 개발자 계정 | ⬜ (「임계 CRITICAL」과 공유) |
 
 ---
 
-## 1. GitHub에 올리기
+## 1. GitHub에 올리기 — 명령 하나
 
 ```bash
-cd /root/chess-app
-git init && git add -A && git commit -m "체스 복기왕 1.0.0"
-gh auth login                      # 아직 로그인 안 되어 있음
-gh repo create chess-review --public --source=. --push
+gh auth login                     # 한 번만. 브라우저 인증
+bash tools/publish.sh             # 저장소 생성+push, 서명키 등록, Pages, 빌드 시작
 ```
 
-> **공개(public) 저장소여야 합니다.** 스톡피시가 GPLv3라서 소스 공개 의무가 있습니다.
+`publish.sh` 가 하는 일:
+1. **public** 저장소 생성 + push (스톡피시 GPLv3 → 소스 공개 의무)
+2. 서명키를 Actions 비밀값 4개로 등록 (키 파일 자체는 절대 올라가지 않음)
+3. GitHub Pages 켜기 → 개인정보처리방침 URL 확보 (Play 필수 항목)
+4. 빌드 실행
 
-### 서명 키를 Actions 비밀값으로 등록
+<details><summary>수동으로 하려면</summary>
 
 ```bash
+gh repo create chess-review --public --source=. --push
 gh secret set KEYSTORE_BASE64   < keystore/upload.jks.base64
 gh secret set KEYSTORE_PASSWORD < keystore/PASSWORD.txt
-echo -n upload | gh secret set KEY_ALIAS
+printf upload | gh secret set KEY_ALIAS
 gh secret set KEY_PASSWORD      < keystore/PASSWORD.txt
 ```
+</details>
 
 ## 2. 빌드
 
