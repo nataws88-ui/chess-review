@@ -155,6 +155,7 @@ public class View {
   public void setPadding(int l, int t, int r, int b) {}
   public int getPaddingBottom() { return 0; }
   public void setOnApplyWindowInsetsListener(OnApplyWindowInsetsListener l) {}
+  public boolean postDelayed(Runnable r, long ms) { return true; }
   public interface OnApplyWindowInsetsListener { WindowInsets onApplyWindowInsets(View v, WindowInsets insets); }
 }
 EOF

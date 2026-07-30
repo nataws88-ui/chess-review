@@ -44,8 +44,10 @@ class Ads {
     private InterstitialAd full;
     private boolean sdkReady;
     private boolean wantBanner;
+    private boolean bannerLoaded;
     private boolean loadingFull;
     private boolean keyboardUp;
+    private int bannerTries;
     private long lastFullAt;
 
     Ads(MainActivity a, FrameLayout holder) {
@@ -111,7 +113,22 @@ class Ads {
             banner.setAdUnitId(a.getString(R.string.admob_banner));
             banner.setAdSize(adaptiveSize());
             banner.setAdListener(new AdListener() {
-                @Override public void onAdLoaded() { apply(); }
+                @Override public void onAdLoaded() {
+                    bannerLoaded = true;
+                    bannerTries = 0;
+                    apply();
+                }
+                @Override public void onAdFailedToLoad(LoadAdError e) {
+                    // 아직 광고가 없거나 오프라인 → 자리를 비워두지 않고 잠시 뒤 다시 시도.
+                    // (실패한 배너는 스스로 갱신하지 않으므로 우리가 재요청해야 한다)
+                    bannerLoaded = false;
+                    apply();
+                    if (++bannerTries <= 3) {
+                        holder.postDelayed(() -> {
+                            try { banner.loadAd(new AdRequest.Builder().build()); } catch (Throwable ignored) {}
+                        }, 60_000L * bannerTries);
+                    }
+                }
             });
             holder.addView(banner, new FrameLayout.LayoutParams(
                     FrameLayout.LayoutParams.MATCH_PARENT,
@@ -130,9 +147,13 @@ class Ads {
         return AdSize.getCurrentOrientationAnchoredAdaptiveBannerAdSize(a, widthDp);
     }
 
-    /** 배너 표시 상태를 실제 뷰와 웹앱(CSS 변수)에 반영한다. */
+    /**
+     * 배너 표시 상태를 실제 뷰와 웹앱(CSS 변수)에 반영한다.
+     * 광고가 실제로 실린 뒤에만 자리를 잡는다 — 안 실렸을 때 빈 띠가 남으면
+     * 탭바가 떠 보이고 그 사이로 화면 내용이 비친다(오프라인에서 항상 그런 상태가 된다).
+     */
     private void apply() {
-        boolean vis = wantBanner && !keyboardUp && banner != null;
+        boolean vis = wantBanner && !keyboardUp && banner != null && bannerLoaded;
         holder.setVisibility(vis ? View.VISIBLE : View.GONE);
         a.setAdHeight(vis ? bannerHeightPx() : 0);
     }
