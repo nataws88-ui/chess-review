@@ -31,6 +31,10 @@ import com.google.android.ump.UserMessagingPlatform;
  */
 class Ads {
 
+    /** 테스트 기기(=개발자 폰) 목록 — 이 기기에서는 언제나 테스트 광고만 나온다 */
+    private static final java.util.List<String> TEST_DEVICES =
+            java.util.Arrays.asList("E70158778E5BCDDDC027E07A58727BAD");   // 갤럭시 폴드(개발용)
+
     /** 전면광고 최소 간격 */
     private static final long GAP_MS = 3 * 60 * 1000L;
     /** 앱을 켠 직후에는 띄우지 않는다 */
@@ -79,6 +83,11 @@ class Ads {
             // 전체이용가 앱이므로 광고도 전체이용가(G)로 제한한다.
             MobileAds.setRequestConfiguration(new RequestConfiguration.Builder()
                     .setMaxAdContentRating(RequestConfiguration.MAX_AD_CONTENT_RATING_G)
+                    // 개발자 본인 기기는 테스트 기기로 고정한다.
+                    // 내 폰에서 실제 광고를 받으면 실수로 한 번만 눌러도 "무효 트래픽"이 되어
+                    // 계정이 정지될 수 있다. 테스트 기기에서는 노출·클릭이 집계되지 않는다.
+                    // (기기 ID는 logcat 의 "Use RequestConfiguration.Builder().setTestDeviceIds..." 줄에서 확인)
+                    .setTestDeviceIds(TEST_DEVICES)
                     .build());
             MobileAds.initialize(a, status -> {});
             ensureBanner();
