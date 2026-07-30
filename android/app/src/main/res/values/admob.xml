@@ -15,8 +15,8 @@
   ⚠️ 실제 ID로 바꾼 다음에는 내 광고를 절대 직접 누르지 마세요 (무효 트래픽 = 계정 정지).
 -->
 <resources>
-    <string name="admob_app_id" translatable="false">ca-app-pub-3940256099942544~3347511713</string>
-    <string name="admob_banner" translatable="false">ca-app-pub-3940256099942544/6300978111</string>
-    <string name="admob_interstitial" translatable="false">ca-app-pub-3940256099942544/1033173712</string>
-    <bool name="admob_is_test">true</bool>
+    <string name="admob_app_id" translatable="false">ca-app-pub-3133219650005703~1579655028</string>
+    <string name="admob_banner" translatable="false">ca-app-pub-3133219650005703/5694728078</string>
+    <string name="admob_interstitial" translatable="false">ca-app-pub-3133219650005703/1216547153</string>
+    <bool name="admob_is_test">false</bool>
 </resources>
