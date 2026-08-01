@@ -134,6 +134,37 @@ export function buildWhys(fen, played, best, report, ply, kind) {
 
 const GLYPH = { blunder: '??', mistake: '?', inaccuracy: '?!', best: '', excellent: '', good: '', book: '' };
 
+/* ---------------- 수 품질 10단계 (체스닷컴식) ----------------
+ * 엔진 분류(report.cls)는 7단계지만, 여기에
+ *   💎 gems(희생 여부) → 탁월/매우 좋아요,  mw(놓친 승리) → 놓친 수
+ * 를 얹어 화면에는 10단계로 보여준다. 로직(문제 생성)은 원래 7단계를 그대로 쓴다. */
+export const QUALITY = {
+  brilliant: { g: '!!', ko: '탁월합니다', c: '#2BD3B0', tip: '기물을 내주고도 최선인 수' },
+  great: { g: '!', ko: '매우 좋아요', c: '#7FB0E0', tip: '이것 말고는 크게 나빠지는, 사실상 유일한 수' },
+  best: { g: '★', ko: '최고', c: '#A8D45C', tip: '엔진의 1순위와 같은 수' },
+  excellent: { g: '👍', ko: '우수합니다', c: '#9CC96A', tip: '최선과 거의 차이 없는 수' },
+  good: { g: '✓', ko: '좋습니다', c: '#A9BE9C', tip: '무난한 수' },
+  book: { g: '📖', ko: '이론', c: '#C79E76', tip: '정석(오프닝 이론)에 있는 수' },
+  inaccuracy: { g: '?!', ko: '부정확함', c: '#F7C631', tip: '승률을 조금 놓친 수' },
+  mistake: { g: '?', ko: '실수', c: '#F0912E', tip: '승률을 크게 놓친 수' },
+  miss: { g: '✗', ko: '놓친 수', c: '#FF8A7A', tip: '이겼어야 할 국면을 놓친 수' },
+  blunder: { g: '??', ko: '블런더', c: '#FF5945', tip: '승부를 뒤집을 만큼 나쁜 수' },
+};
+export const QUALITY_ORDER = ['brilliant', 'great', 'best', 'excellent', 'good', 'book',
+  'inaccuracy', 'mistake', 'miss', 'blunder'];
+
+/** report(7단계 cls) → 화면 표시용 10단계 배열 */
+export function displayCls(report) {
+  const out = ((report && report.cls) || []).slice();
+  for (const g of (report && report.gems) || []) {
+    if (g && out[g.i]) out[g.i] = g.sac ? 'brilliant' : 'great';
+  }
+  for (const i of (report && report.mw) || []) {
+    if (out[i]) out[i] = 'miss';       // 놓친 승리는 실수/블런더보다 우선해 보여준다
+  }
+  return out;
+}
+
 /**
  * 저장된 게임 레코드 → 화면에서 쓰는 전체 데이터
  * @param rec {id, pgn, meta, report}
@@ -146,6 +177,7 @@ export function buildGame(rec, myName = '', opts = {}) {
   game.loadPgn(rec.pgn, { strict: false });
   const moves = game.history({ verbose: true });
   const cls = (report && report.cls) || [];
+  const dcls = displayCls(report);            // 표시용 10단계 (문제 생성 로직은 cls 그대로)
   const bests = (report && report.bests) || [];
   const pvs = (report && report.pvs) || [];
   const deep = (report && report.deep) || {};
@@ -217,7 +249,7 @@ export function buildGame(rec, myName = '', opts = {}) {
 
     plies.push({
       san: m.san, glyph, frm: m.from, to: m.to, fen: m.after,
-      hint: best || '', mn, side, cls: c,
+      hint: best || '', mn, side, cls: dcls[i] || c, raw: c,
       bestLine: lineMoves(fenBefore, pvs[i] || (best ? [best] : []), 3),
     });
   }
@@ -251,9 +283,10 @@ export function buildGame(rec, myName = '', opts = {}) {
 
 /** 리포트의 품질 카운트 → 좋음/부정확/실수 비율 */
 export function qualityPct(counts) {
-  const gd = ['book', 'best', 'excellent', 'good'].reduce((a, k) => a + (counts[k] || 0), 0);
+  const gd = ['book', 'best', 'excellent', 'good', 'brilliant', 'great']
+    .reduce((a, k) => a + (counts[k] || 0), 0);
   const yl = counts.inaccuracy || 0;
-  const rd = (counts.mistake || 0) + (counts.blunder || 0);
+  const rd = (counts.mistake || 0) + (counts.blunder || 0) + (counts.miss || 0);
   const tot = Math.max(1, gd + yl + rd);
   return { g: Math.round(gd * 1000 / tot) / 10, y: Math.round(yl * 1000 / tot) / 10, r: Math.round(rd * 1000 / tot) / 10 };
 }

@@ -94,6 +94,18 @@ ok(typeof hang === 'string' || hang === null, 'hangingAfter 동작', String(hang
 ok(resultKo('1-0') === '백 승' && resultKo('0-1') === '흑 승', '결과 한국어');
 ok(qualityPct({ best: 5, inaccuracy: 3, blunder: 2 }).g === 50, '품질 비율 계산');
 
+// 💎 탁월(!!) 판정 = 기물을 내주고도 최선인 수
+{
+  const { isSacrifice } = await import('../www/js/analyze.js');
+  const sacs = [
+    ['6k1/7p/8/7Q/8/8/8/6K1 w - - 0 1', 'Qxh7+', true, '퀸을 h7에 던짐(킹이 되잡음)'],
+    ['r1bqkb1r/pppp1ppp/2n2n2/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 1', 'Bxf7+', true, '비숍 f7 희생'],
+    ['rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', 'e4', false, '평범한 e4는 희생 아님'],
+    ['r1bqkb1r/pppp1ppp/2n2n2/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 1', 'O-O', false, '캐슬링은 희생 아님'],
+  ];
+  for (const [f, s, exp, label] of sacs) ok(isSacrifice(f, s) === exp, '희생 판정: ' + label);
+}
+
 /* 3. 엔진 왕복 */
 console.log('\n3) 엔진 (UCI 왕복)');
 await engine.start();
@@ -130,6 +142,19 @@ if (existsSync(pgnPath)) {
   const rec = { id: gameId(meta), pgn, meta, report };
   const built = buildGame(rec, 'bicyail');
   ok(built.plies.length === sans.length, '복기 수 목록');
+
+  // 수 품질 10단계 — 표시용 분류가 수 개수와 맞고, 아는 등급만 나오는지
+  {
+    const { QUALITY, QUALITY_ORDER, displayCls } = await import('../www/js/quizgen.js');
+    const dc = displayCls(report);
+    ok(dc.length === sans.length, '표시용 등급(10단계) 길이');
+    ok(dc.every((c) => !c || QUALITY[c]), '알 수 없는 등급 없음');
+    ok(built.plies.every((p, i) => p.cls === dc[i]), '수 목록 등급 = 표시용 등급');
+    const cnt = {};
+    built.plies.forEach((p) => { cnt[p.cls] = (cnt[p.cls] || 0) + 1; });
+    ok(Object.values(cnt).reduce((a, x) => a + x, 0) === sans.length, '등급 합계 = 수 개수');
+    console.log('     🏅 ' + QUALITY_ORDER.filter((k) => cnt[k]).map((k) => `${QUALITY[k].g} ${QUALITY[k].ko} ${cnt[k]}`).join(' · '));
+  }
   console.log(`     ⏱ ${secs}초 · 문제 ${built.problems.length}개 · 마지막 단계 ${last}`);
 
   for (const p of built.problems.slice(0, 4)) {

@@ -324,5 +324,57 @@ if (firstId) {
   }
 }
 
+/* ---------------- 수 품질 표: 등급별 개수 + 눌러서 그 수로 ---------------- */
+if (firstId) {
+  console.log('\n수 품질 표 (리포트)');
+  try {
+    const { QUALITY, QUALITY_ORDER, displayCls } = await import('../www/js/quizgen.js');
+    const { loadBuilt } = await import('../www/js/games.js');
+    const built = await loadBuilt(firstId);
+
+    ok(QUALITY_ORDER.length === 10, `등급 10단계 정의 (${QUALITY_ORDER.map((k) => QUALITY[k].ko).join('/')})`);
+    ok(QUALITY_ORDER.every((k) => QUALITY[k] && QUALITY[k].g && QUALITY[k].c), '모든 등급에 기호·색 있음');
+
+    const dc = displayCls(built.report);
+    ok(dc.length === built.plies.length, '표시용 분류 길이 = 수 개수');
+    ok(built.plies.every((p, i) => p.cls === dc[i]), '수 목록의 등급 = 표시용 분류');
+    ok(built.plies.every((p) => QUALITY[p.cls] || !p.cls), '알 수 없는 등급 없음');
+
+    // 화면에 실제로 개수가 나오는지 + 숫자를 누르면 그 수로 가는지
+    const app = new El('div');
+    app.id = 'app';
+    doc.children = [app];
+    const gm = await import('../www/js/views/game.js');
+    await gm.view(app, { id: firstId, tab: 'report' });
+    for (let i = 0; i < 6; i++) await new Promise((r) => setTimeout(r, 12));
+
+    const cnt = {};
+    built.plies.forEach((p) => { cnt[p.cls] = (cnt[p.cls] || 0) + 1; });
+    const shown = QUALITY_ORDER.filter((k) => cnt[k]);
+    const txt = app.textContent;
+    ok(shown.every((k) => txt.includes(QUALITY[k].ko)), `등급 이름 표시 (${shown.map((k) => `${QUALITY[k].ko} ${cnt[k]}`).join(', ')})`);
+
+    const findAll = (el, out = []) => {
+      if (el.classList && el.classList.contains && el.classList.contains('tapn')) out.push(el);
+      (el.children || []).forEach((c) => c.appendChild && findAll(c, out));
+      return out;
+    };
+    const taps = findAll(app);
+    ok(taps.length > 0, `누를 수 있는 숫자 ${taps.length}개`);
+    if (taps.length) {
+      const before = app.textContent;
+      taps[0].dispatchEvent ? taps[0].dispatchEvent({ type: 'click' }) : null;
+      const ev = [...listeners].find(([el, t]) => el === taps[0] && t === 'click');
+      if (ev) ev[2]({});
+      for (let i = 0; i < 6; i++) await new Promise((r) => setTimeout(r, 12));
+      ok(app.textContent.includes('수 목록'), '숫자를 누르면 복기 화면으로 이동');
+      ok(app.textContent !== before, '화면이 실제로 바뀜');
+    }
+  } catch (e) {
+    fail++;
+    console.log(`  ❌ 수 품질 표 — ${e.message}\n     ${(e.stack || '').split('\n')[1] || ''}`);
+  }
+}
+
 console.log(`\n${'='.repeat(46)}\n화면 테스트: ${pass}개 통과, ${fail}개 실패`);
 process.exit(fail ? 1 : 0);

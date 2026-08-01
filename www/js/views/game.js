@@ -4,16 +4,19 @@ import { h, nav, screen, toast, $, clear } from '../ui.js';
 import { renderBoard, addMark, lineArrows } from '../board.js';
 import { settings, store } from '../store.js';
 import { loadBuilt } from '../games.js';
-import { resultKo, qualityPct } from '../quizgen.js';
+import { resultKo, qualityPct, QUALITY, QUALITY_ORDER } from '../quizgen.js';
 import { mountQuiz } from './quiz.js';
 import { accColor } from './home.js';
 
-const QUALITY = {
-  best: ['⭐', '최선', '#8fe3ab'], excellent: ['✨', '훌륭', '#a8dfc0'],
-  good: ['👍', '좋음', '#b8c8d8'], book: ['📖', '정석', '#9ab0c8'],
-  inaccuracy: ['🤔', '부정확', '#ffe08a'], mistake: ['❗', '실수', '#ffc08a'],
-  blunder: ['💥', '블런더', '#ff9a9a'],
-};
+/** 등급 아이콘(색 동그라미) */
+export function qIcon(k, size = 26) {
+  const q = QUALITY[k];
+  if (!q) return h('span');
+  return h('span.qi', {
+    style: `background:${q.c};width:${size}px;height:${size}px;font-size:${size * 0.46}px`,
+    title: q.ko,
+  }, q.g);
+}
 
 export async function view(app, params) {
   const st = await settings();
@@ -61,6 +64,23 @@ export async function view(app, params) {
   }
 
   let reviewStart = 0;
+  const qCycle = {};        // 등급별로 몇 번째 수까지 봤는지 (누를 때마다 다음 수)
+
+  /** 리포트에서 등급 숫자를 눌렀을 때 — 그 등급의 수로 복기 화면 이동 */
+  function jumpQ(side, k) {
+    const list = [];
+    plies.forEach((p, i) => { if (p.side === side && p.cls === k) list.push(i + 1); });
+    if (!list.length) return;
+    const key = side + k;
+    const n = (qCycle[key] || 0) % list.length;
+    qCycle[key] = n + 1;
+    reviewStart = list[n];
+    cur = 'review';
+    paint();
+    window.scrollTo(0, 0);
+    if (list.length > 1) toast(`${QUALITY[k].ko} ${list.length}개 중 ${n + 1}번째`);
+  }
+
   function paint() {
     Array.from(tabs.children).forEach((t, i) => t.classList.toggle('on', TABS[i][0] === cur));
     clear(pane);
@@ -192,12 +212,15 @@ export async function view(app, params) {
         return;
       }
       const p = plies[i - 1];
-      const [ic, name, color] = QUALITY[p.cls] || ['·', '', '#cfd6e0'];
+      const q = QUALITY[p.cls] || { g: '·', ko: '', c: '#cfd6e0', tip: '' };
       const wpw = (report && report.wp && report.wp[i - 1] != null) ? report.wp[i - 1] : null;
       info.appendChild(h('div.row',
-        h('span', { style: `font-weight:800;color:${color}` }, `${ic} ${p.mn}${p.side === 'w' ? '.' : '...'} ${p.san}${p.glyph}`),
+        qIcon(p.cls, 24),
+        h('span', { style: `font-weight:800;color:${q.c};margin-left:8px` },
+          `${p.mn}${p.side === 'w' ? '.' : '...'} ${p.san}${p.glyph}`),
         h('div.spacer'),
-        h('span.badge.info', name)));
+        h('span.badge.info', q.ko)));
+      if (q.tip) info.appendChild(h('p.dim', { style: 'margin-top:4px' }, q.tip));
       if (wpw != null) {
         info.appendChild(h('div.wpbar.mt',
           h('div.w', { style: `width:${wpw}%` }, wpw >= 18 ? `백 ${Math.round(wpw)}%` : ''),
@@ -262,27 +285,36 @@ export async function view(app, params) {
       canvas));
     drawEvalGraph(canvas, report, -1, (ply) => { reviewStart = ply; cur = 'review'; paint(); }, true);
 
-    // 수 품질 통계
-    const rows = ['best', 'excellent', 'good', 'book', 'inaccuracy', 'mistake', 'blunder'];
-    const table = h('div');
-    for (const k of rows) {
-      const [ic, label, color] = QUALITY[k];
-      const mine = (report.counts[me] || {})[k] || 0;
-      const theirs = (report.counts[opp] || {})[k] || 0;
-      if (!mine && !theirs) continue;
-      table.appendChild(h('div.row', { style: 'padding:6px 0;border-bottom:1px solid var(--line)' },
-        h('span', { style: `color:${color};font-weight:700;flex:1` }, `${ic} ${label}`),
-        h('span', { style: 'width:52px;text-align:right;font-weight:800' }, String(mine)),
-        h('span.dim', { style: 'width:52px;text-align:right' }, String(theirs))));
+    // ---- 수 품질 (10단계 · 숫자를 누르면 그 수로 이동) ----
+    const cnt = { w: {}, b: {} };
+    plies.forEach((p) => { cnt[p.side][p.cls] = (cnt[p.side][p.cls] || 0) + 1; });
+
+    const tagOf = (sd) => (st.myName ? (sd === me ? '나' : '상대') : (sd === 'w' ? '백' : '흑'));
+    const hd = (sd) => h('span.qn.hd', h('b', tagOf(sd)), h('span.nm', nameOf(sd)));
+
+    const table = h('div.qtable');
+    table.appendChild(h('div.qrow.head', h('span.qlabel'), hd(me), h('span'), hd(opp)));
+
+    for (const k of QUALITY_ORDER) {
+      const a = cnt[me][k] || 0;
+      const c = cnt[opp][k] || 0;
+      if (!a && !c) continue;
+      const q = QUALITY[k];
+      table.appendChild(h('div.qrow',
+        h('span.qlabel', { style: `color:${q.c}` }, q.ko),
+        qCell(me, k, a),
+        qIcon(k),
+        qCell(opp, k, c)));
     }
     host.appendChild(h('div.card',
-      h('div.row.mb', h('h3', { style: 'flex:1' }, '수 품질'),
-        h('span.dim', { style: 'width:52px;text-align:right' }, '나'),
-        h('span.dim', { style: 'width:52px;text-align:right' }, '상대')),
-      table,
-      (report.counts[me] || {}).mw
-        ? h('p.sub.mt', `🏆 놓친 승리 ${report.counts[me].mw}회 — 이겼어야 할 국면을 놓쳤습니다`)
-        : null));
+      h('h3', '수 품질'),
+      h('p.dim.mb', '숫자를 누르면 그 수로 바로 갑니다 · 여러 개면 누를 때마다 다음 수로'),
+      table));
+
+    function qCell(side, k, n) {
+      if (!n) return h('span.qn.zero', '0');
+      return h('button.qn.tapn', { style: `color:${QUALITY[k].c}`, onclick: () => jumpQ(side, k) }, String(n));
+    }
 
     // 구간별 정확도
     const ph = report.acc_ph[me] || [];
@@ -294,14 +326,14 @@ export async function view(app, params) {
         h('div.v', { style: `color:${v == null ? 'var(--dim)' : accColor(v)}` }, v == null ? '—' : v + '%'))))));
 
     // 품질 비율 막대
-    const pct = qualityPct(report.counts[me] || {});
+    const pct = qualityPct(cnt[me]);
     host.appendChild(h('div.card',
       h('h3', '내 수 분포'),
       h('div.wpbar.mt', { style: 'height:30px' },
         h('div', { style: `width:${pct.g}%;background:#3fae6a;color:#04240f` }, pct.g >= 14 ? `좋음 ${pct.g}%` : ''),
         h('div', { style: `width:${pct.y}%;background:#d8b44a;color:#2a2103` }, pct.y >= 14 ? `부정확 ${pct.y}%` : ''),
         h('div', { style: `width:${pct.r}%;background:#d05656;color:#2a0606` }, pct.r >= 14 ? `실수 ${pct.r}%` : '')),
-      h('p.dim.mt', `총 ${Object.values(report.counts[me] || {}).reduce((a, x) => a + x, 0)}수 · 평균 손실 ${report.cpl[me]}cp`)));
+      h('p.dim.mt', `총 ${Object.values(cnt[me]).reduce((a, x) => a + x, 0)}수 · 평균 손실 ${report.cpl[me]}cp`)));
   }
 
   function accCard(name, acc, est, cpl) {

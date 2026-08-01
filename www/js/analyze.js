@@ -99,6 +99,31 @@ function heavyCount(chess) {
   return n;
 }
 
+const PVAL = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 100 };
+/** 이 수를 두면 기물을 내주게 되는가(희생) — 💎탁월(!!) 과 ❗매우 좋아요(!) 를 가른다 */
+export function isSacrifice(fenBefore, san) {
+  const b = new Chess(fenBefore);
+  const me = b.turn();
+  let m;
+  try { m = b.move(san); } catch (e) { return false; }
+  if (!m) return false;
+  const enemy = me === 'w' ? 'b' : 'w';
+  const gained = m.captured ? (PVAL[m.captured] || 0) : 0;
+  for (const row of b.board()) {
+    for (const cell of row || []) {
+      if (!cell || cell.color !== me || cell.type === 'k') continue;
+      const v = PVAL[cell.type] || 0;
+      if (v - gained < 2) continue;                     // 내주는 값이 2점 미만이면 희생이 아니다
+      const atk = b.attackers(cell.square, enemy);
+      if (!atk.length) continue;
+      const dfd = b.attackers(cell.square, me);
+      const minAtk = Math.min(...atk.map((s) => PVAL[(b.get(s) || {}).type] || 0));
+      if (!dfd.length || minAtk < v) return true;       // 상대가 이득 보며 잡을 수 있는데 그냥 뒀다
+    }
+  }
+  return false;
+}
+
 /**
  * 한 게임 전체 분석.
  * @param {string} pgn
@@ -248,10 +273,10 @@ export async function analyzeGame(pgn, opts = {}) {
       if (w < 5 || w > 97) continue;          // 이미 끝난 국면은 제외
       cand.push(i);
     }
-    // 너무 오래 걸리지 않게 최대 4개만, 게임 전체에 고르게
+    // 너무 오래 걸리지 않게 최대 6개만, 게임 전체에 고르게
     const pick = [];
-    const step = Math.max(1, Math.ceil(cand.length / 4));
-    for (let k = 0; k < cand.length && pick.length < 4; k += step) pick.push(cand[k]);
+    const step = Math.max(1, Math.ceil(cand.length / 6));
+    for (let k = 0; k < cand.length && pick.length < 6; k += step) pick.push(cand[k]);
 
     for (let k = 0; k < pick.length; k++) {
       chk();
@@ -267,7 +292,10 @@ export async function analyzeGame(pgn, opts = {}) {
         const gain = Math.round((w1 - w2) * 10) / 10;
         const bestSan = uciToSan(fen, res[0].pv, 1)[0];
         if (gain >= 12 && bestSan === sans[i]) {
-          gems.push({ i, gain, alt: uciToSan(fen, res[1].pv, 1)[0] || null });
+          gems.push({
+            i, gain, alt: uciToSan(fen, res[1].pv, 1)[0] || null,
+            sac: isSacrifice(fen, sans[i]),
+          });
         }
       } catch (e) {
         if (sig.cancelled) throw e;

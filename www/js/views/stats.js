@@ -4,6 +4,8 @@ import { h, nav, screen, clear } from '../ui.js';
 import { settings, store, getSrs } from '../store.js';
 import { allCards } from '../games.js';
 import { accColor } from './home.js';
+import { displayCls, QUALITY, QUALITY_ORDER } from '../quizgen.js';
+import { qIcon } from './game.js';
 
 export async function view(app) {
   const st = await settings();
@@ -79,6 +81,15 @@ export async function view(app) {
       counts[k] = (counts[k] || 0) + v;
       totalMoves += v;
     }
+    // 7단계 집계에 💎탁월/❗매우 좋아요/✗놓친 수를 반영한다 (해당 수의 원래 등급에서 옮김)
+    const dc = displayCls(r);
+    for (let i = 0; i < dc.length; i++) {
+      if ((i % 2 === 0 ? 'w' : 'b') !== sd) continue;
+      const base = (r.cls || [])[i];
+      if (!base || dc[i] === base) continue;
+      counts[base] = Math.max(0, (counts[base] || 0) - 1);
+      counts[dc[i]] = (counts[dc[i]] || 0) + 1;
+    }
   }
   const avg = (xs) => (xs.length ? Math.round(xs.reduce((a, x) => a + x, 0) / xs.length * 10) / 10 : null);
   const phName = ['오프닝', '미들게임', '엔드게임'];
@@ -88,6 +99,26 @@ export async function view(app) {
     h('div.grid3.mt', ...phAvg.map((v, i) => h('div.stat',
       h('div.k', phName[i]),
       h('div.v', { style: `color:${v == null ? 'var(--dim)' : accColor(v)}` }, v == null ? '—' : v + '%'))))));
+
+  // ---- 수 품질 누적 ----
+  if (totalMoves) {
+    const qt = h('div.qtable');
+    for (const k of QUALITY_ORDER) {
+      const v = counts[k] || 0;
+      if (!v) continue;
+      const q = QUALITY[k];
+      qt.appendChild(h('div.qrow', { style: 'grid-template-columns:30px 1fr 58px 64px' },
+        qIcon(k),
+        h('span.qlabel', { style: `color:${q.c};padding-left:6px` }, q.ko),
+        h('span.qn', { style: `color:${q.c}` }, String(v)),
+        h('span.qn.zero', { style: 'font-size:.8rem;font-weight:700' },
+          (Math.round(v / totalMoves * 1000) / 10) + '%')));
+    }
+    b.appendChild(h('div.card',
+      h('h3', '수 품질 (전체 누적)'),
+      h('p.dim.mb', `내가 둔 ${totalMoves}수`),
+      qt));
+  }
 
   // ---- 약점 태그 ----
   const cards = (await allCards()).filter((c) => c.mine);

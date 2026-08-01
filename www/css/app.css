@@ -129,9 +129,34 @@ a{color:var(--accent);text-decoration:none}
 .mv{display:inline-block;padding:3px 7px;border-radius:7px;font-size:.85rem;
   font-weight:600;font-variant-numeric:tabular-nums}
 .mv.on{background:var(--accent);color:#04240f}
-.mv.q-blunder{color:#ff9a9a}.mv.q-mistake{color:#ffc08a}.mv.q-inaccuracy{color:#ffe08a}
-.mv.q-best{color:#8fe3ab}
+.mv.q-brilliant{color:#2BD3B0}.mv.q-great{color:#7FB0E0}
+.mv.q-best{color:#A8D45C}.mv.q-excellent{color:#9CC96A}.mv.q-good{color:#A9BE9C}
+.mv.q-book{color:#C79E76}
+.mv.q-inaccuracy{color:#F7C631}.mv.q-mistake{color:#F0912E}
+.mv.q-miss{color:#FF8A7A}.mv.q-blunder{color:#FF5945}
 .mvno{color:var(--dim);font-size:.8rem;padding-left:4px}
+
+/* ---------- 수 품질 표 ---------- */
+.qi{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;
+  border-radius:50%;color:#0d1116;font-weight:900;line-height:1;flex:none;
+  font-family:ui-sans-serif,system-ui,sans-serif;letter-spacing:-.02em;
+  box-shadow:0 1px 3px rgba(0,0,0,.45)}
+.qtable{margin-top:2px}
+.qrow{display:grid;grid-template-columns:1fr 58px 30px 58px;align-items:center;gap:4px;
+  padding:5px 0;border-bottom:1px solid var(--line)}
+.qrow:last-child{border-bottom:0}
+.qrow.head{border-bottom:1px solid var(--line2);padding-bottom:7px}
+.qlabel{font-weight:700;font-size:.88rem}
+.qn{text-align:center;font-weight:800;font-size:1.05rem;font-variant-numeric:tabular-nums;
+  padding:5px 0;border-radius:9px;background:none;border:0}
+.qn.hd{padding:0 0 2px;line-height:1.2}
+.qn.hd b{display:block;font-size:.8rem;color:var(--tx)}
+.qn.hd .nm{display:block;font-size:.62rem;font-weight:600;color:var(--dim);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.qn.zero{color:#4a5260}
+.qn.tapn{background:var(--card2);border:1px solid var(--line2);cursor:pointer;
+  transition:transform .1s,filter .1s}
+.qn.tapn:active{transform:scale(.92);filter:brightness(1.4)}
 
 /* ---------- 통계 ---------- */
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
