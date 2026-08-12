@@ -1,8 +1,9 @@
 /* 체스 복기왕 — 진입점 */
 
-import { route, startRouter, h, $, nav, toast, isApp } from './ui.js';
+import { route, startRouter, h, $, nav, toast, isApp, applyTheme } from './ui.js';
 import { loadSprite } from './board.js';
 import { settings } from './store.js';
+import { migrateAccuracy } from './games.js';
 
 import * as home from './views/home.js';
 import * as importView from './views/import.js';
@@ -50,7 +51,9 @@ window.__incomingPgn = (text) => {
 
 async function boot() {
   await loadSprite();
-  await settings();
+  const st = await settings();
+  applyTheme(st.theme);
+  migrateAccuracy().catch(() => {});   // 옛 경기 정확도 맞추기 (실패해도 앱은 뜬다)
   window.addEventListener('hashchange', renderNav);
   renderNav();
   startRouter();

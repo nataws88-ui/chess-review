@@ -34,13 +34,17 @@ global.sessionStorage = { getItem: () => null, setItem: noop, removeItem: noop }
 global.localStorage = global.sessionStorage;
 
 const MODULES = [
-  ['engine.js', ['engine', 'toScore']],
-  ['analyze.js', ['analyzeGame', 'wp', 'moveAcc', 'classify', 'findOpening', 'uciToSan']],
+  ['engine.js', ['engine', 'toScore', 'wdlPct']],
+  ['openings.js', ['OPENINGS', 'findOpening']],
+  ['analyze.js', ['analyzeGame', 'wp', 'moveAcc', 'classify', 'findOpening', 'uciToSan',
+    'gameAccuracy', 'parseClocks', 'parseTimeControl', 'thinkTimes']],
   ['quizgen.js', ['buildGame', 'moveFacts', 'hangingAfter', 'buildWhys', 'winPcts', 'legalMovesData', 'qualityPct']],
-  ['games.js', ['splitPgn', 'peek', 'analyzeAndSave', 'loadBuilt', 'allCards', 'chessComUrl']],
+  ['games.js', ['splitPgn', 'peek', 'analyzeAndSave', 'loadBuilt', 'allCards', 'chessComUrl',
+    'lichessUrl', 'migrateAccuracy']],
   ['store.js', ['store', 'settings', 'setSetting', 'getSrs', 'setSrs', 'schedule', 'today', 'IVL']],
   ['board.js', ['renderBoard', 'loadSprite', 'fenMap', 'addMark', 'sqXY', 'xyToSq', 'THEMES']],
-  ['ui.js', ['h', 'route', 'nav', 'screen', 'toast', 'httpGet', 'pickFile', 'saveFile', 'play', 'progressBar']],
+  ['ui.js', ['h', 'route', 'nav', 'screen', 'toast', 'httpGet', 'pickFile', 'saveFile', 'play', 'progressBar',
+    'applyTheme', 'onSwipe', 'cssVar', 'fmtSec']],
   ['views/home.js', ['view', 'accColor']],
   ['views/import.js', ['view']],
   ['views/game.js', ['view', 'drawEvalGraph']],

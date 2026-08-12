@@ -13,6 +13,35 @@ export const THEMES = {
   slate:  { l: '#8E9BB2', d: '#5B6980', edge: '#2b3444', lab: '#3a4457', labL: '#e3e8f0' },
 };
 
+/* 판 밝기 — 어두운 방에서는 기본 판이 눈부시다는 요구로 넣었다.
+ * 기물이 순백/순흑에 반대색 외곽선이라, 칸을 어둡게 해도 양쪽 다 잘 보인다.
+ * 0=원래(밝음) · 1=진하게(기본) · 2=더 진하게 */
+export const SHADES = [1, 0.82, 0.66];
+
+/** 색을 그대로 어둡게 (색조는 유지) */
+export function shade(hex, f) {
+  if (f >= 1) return hex;
+  let c = String(hex).trim();
+  if (c[0] !== '#') return hex;
+  if (c.length === 4) c = '#' + c[1] + c[1] + c[2] + c[2] + c[3] + c[3];
+  const v = [1, 3, 5].map((i) => Math.round(parseInt(c.slice(i, i + 2), 16) * f));
+  return '#' + v.map((x) => Math.max(0, Math.min(255, x)).toString(16).padStart(2, '0')).join('');
+}
+
+/** 테마 + 밝기 단계 → 실제로 칠할 색 */
+export function themeColors(name, level = 1) {
+  const base = THEMES[name] || THEMES.green;
+  const f = SHADES[level] == null ? SHADES[1] : SHADES[level];
+  if (f >= 1) return base;
+  return {
+    ...base,
+    l: shade(base.l, f),
+    d: shade(base.d, f),
+    // 칸이 어두워지면 밝은 칸 위의 좌표 글씨도 같이 낮춰야 묻히지 않는다
+    lab: shade(base.lab, Math.min(1, f + 0.15)),
+  };
+}
+
 let spritePromise = null;
 export function loadSprite() {
   if (!spritePromise) {
@@ -78,11 +107,11 @@ function el(tag, attrs = {}, children = []) {
  * 판 그리기
  * @param {HTMLElement} host
  * @param {string} fen
- * @param {object} o {orient, marks, theme, coords, onSquare, arrows, anim:{from,to}, check:'e1'}
+ * @param {object} o {orient, marks, theme, shade:0~2, coords, onSquare, arrows, anim:{from,to}, check:'e1'}
  */
 export function renderBoard(host, fen, o = {}) {
   const orient = o.orient === 'b' ? 'b' : 'w';
-  const th = THEMES[o.theme] || THEMES.green;
+  const th = themeColors(o.theme, o.shade == null ? 1 : o.shade);
   const marks = o.marks || {};
   const pieces = fenMap(fen);
 

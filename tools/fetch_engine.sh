@@ -6,7 +6,7 @@ set -e
 BASE="$(cd "$(dirname "$0")/.." && pwd -P)"
 DEST="$BASE/android/app/src/main/jniLibs/arm64-v8a"
 LOCAL="/data/data/com.termux/files/home/.stockfish/stockfish/stockfish-android-armv8"
-URL="https://github.com/official-stockfish/Stockfish/releases/download/sf_17.1/stockfish-android-armv8.tar"
+URL="https://github.com/official-stockfish/Stockfish/releases/download/sf_18/stockfish-android-armv8.tar"
 
 mkdir -p "$DEST"
 

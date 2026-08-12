@@ -17,6 +17,8 @@ S="$WORK/stub"
 cat > "$S/android/content/Context.java" <<'EOF'
 package android.content;
 public class Context {
+  public static final String ACTIVITY_SERVICE = "activity";
+  public Object getSystemService(String name) { return null; }
   public ContentResolver getContentResolver() { return null; }
   public android.content.pm.ApplicationInfo getApplicationInfo() { return null; }
   public void startActivity(Intent i) {}
@@ -75,6 +77,17 @@ public class Intent {
   public Intent putExtra(String k, String v) { return this; }
   public Intent putExtra(String k, String[] v) { return this; }
   public static Intent createChooser(Intent target, CharSequence title) { return target; }
+}
+EOF
+
+cat > "$S/android/app/ActivityManager.java" <<'EOF'
+package android.app;
+public class ActivityManager {
+  public static class MemoryInfo {
+    public long totalMem;
+    public long availMem;
+  }
+  public void getMemoryInfo(MemoryInfo mi) {}
 }
 EOF
 

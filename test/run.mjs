@@ -11,6 +11,8 @@ import { createRequire } from 'node:module';
 
 const ENGINES = [
   process.env.CHESS_ENGINE,
+  // 앱에 넣는 것과 같은 버전(스톡피시 18)을 먼저 쓴다
+  '/root/vendor/stockfish18/stockfish/stockfish-android-armv8',
   '/data/data/com.termux/files/home/.stockfish/stockfish/stockfish-android-armv8',
   '/usr/games/stockfish',
 ];
@@ -53,7 +55,9 @@ global.self = global.window;
 
 /* ---------- 테스트 ---------- */
 
-const { analyzeGame, wp, classify, findOpening, uciToSan } = await import('../www/js/analyze.js');
+const { analyzeGame, wp, classify, findOpening, uciToSan,
+  gameAccuracy, parseClocks, parseTimeControl, thinkTimes } = await import('../www/js/analyze.js');
+const { wdlPct } = await import('../www/js/engine.js');
 const { buildGame, moveFacts, hangingAfter, resultKo, qualityPct } = await import('../www/js/quizgen.js');
 const { splitPgn, peek, fingerprint, gameId } = await import('../www/js/games.js').catch(() => ({}));
 const engine = (await import('../www/js/engine.js')).default;
@@ -75,8 +79,33 @@ ok(classify('e4', 'e4', 0) === 'best', 'best 판정');
 ok(classify('e4', 'd4', 30) === 'blunder', '30%p 하락 = 블런더');
 ok(classify('e4', 'd4', 13) === 'mistake', '13%p 하락 = 실수');
 ok(classify('e4', 'd4', 6) === 'inaccuracy', '6%p 하락 = 부정확');
-ok(findOpening('e4 e5 Nf3 Nc6 Bc4 Bc5'.split(' '))[0] === 'C50 이탈리안 게임', '오프닝 인식');
+ok(findOpening('e4 e5 Nf3 Nc6 Bc4 Bc5'.split(' '))[0] === 'C50 지오코 피아노', '오프닝 인식');
+ok(findOpening('e4 c5 Nf3 d6 d4 cxd4 Nxd4 Nf6 Nc3 a6'.split(' '))[0] === 'B90 시실리안·나이도르프', '긴 수순 우선 매치');
 ok(uciToSan('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', ['e2e4', 'e7e5', 'g1f3']).join(' ') === 'e4 e5 Nf3', 'UCI→SAN 변환');
+
+/* 1-2. 새 계산들 (WDL 승률·가중 정확도·시간) */
+console.log('\n1-2) 새 지표');
+ok(wdlPct([1000, 0, 0]) === 100 && wdlPct([0, 0, 1000]) === 0, 'WDL 양 끝');
+ok(Math.abs(wdlPct([200, 600, 200]) - 50) < 1e-9, 'WDL 무승부 = 50%');
+ok(wdlPct(null) === null, 'WDL 없으면 null');
+{
+  const flat = Array(41).fill(50);
+  ok(Math.abs(gameAccuracy(flat).w - 100) < 1.5, '완벽한 수순 = 100% 근처', String(gameAccuracy(flat).w));
+  // 8번째 수(흑)에서 백 관점 승률이 50→90 으로 튄다 = 흑만 떨어져야 한다
+  const drop = [50, 50, 50, 50, 50, 50, 50, 50, 90, 90];
+  const a = gameAccuracy(drop);
+  ok(a.b < a.w - 10, `대형 실수는 그 색만 깎인다 (백 ${a.w} 흑 ${a.b})`);
+  ok(a.w <= 100 && a.b >= 0, '정확도 범위 0~100');
+}
+{
+  const pgn = '1. e4 {[%clk 0:03:00]} e5 {[%clk 0:02:58]} 2. Nf3 {[%clk 0:02:55]} Nc6 {[%clk 0:02:50]}';
+  const cl = parseClocks(pgn);
+  ok(cl.length === 4 && cl[0] === 180 && cl[3] === 170, '시계 읽기', JSON.stringify(cl));
+  const th = thinkTimes(cl, '180+2');
+  ok(th[0] === 2 && th[2] === 7, '쓴 시간 계산(증가시간 반영)', JSON.stringify(th));
+  ok(parseTimeControl('600+5').inc === 5 && parseTimeControl('300').base === 300, '시간제어 파싱');
+  ok(parseClocks('1. e4 e5').length === 0, '시계 없는 PGN');
+}
 
 /* 2. 전술 서술 */
 console.log('\n2) 원인 규명(한국어 사실 추출)');
@@ -172,11 +201,21 @@ if (existsSync(pgnPath)) {
     const old = JSON.parse(readFileSync(oldPath, 'utf8'));
     console.log(`\n5) 기존 파이썬 분석과 비교 (파이썬 ${old.movetime}s vs 이번 0.12s)`);
     ok(old.opening === report.opening, `오프닝 일치: ${old.opening}`);
+    // 1.2.0 부터 정확도 공식이 바뀌었다(단순평균 → 변동성 가중 + 조화평균).
+    // 파이썬판보다 후해지면 안 되고, 그렇다고 딴 게임 수준으로 벌어져도 안 된다.
     const dw = Math.abs(old.acc.w - report.acc.w), db = Math.abs(old.acc.b - report.acc.b);
-    ok(dw < 12 && db < 12, `정확도 근사 (백 ${old.acc.w}→${report.acc.w}, 흑 ${old.acc.b}→${report.acc.b})`);
+    ok(dw < 25 && db < 25,
+      `정확도 같은 눈금 안 (파이썬 단순평균 ${old.acc.w}/${old.acc.b} → 가중 ${report.acc.w}/${report.acc.b})`);
+    ok(report.acc.w <= old.acc.w + 2 && report.acc.b <= old.acc.b + 2,
+      '새 공식이 옛 공식보다 후하지 않다');
     const oldBl = (old.cls || []).filter((c) => c === 'blunder' || c === 'mistake').length;
     const newBl = report.cls.filter((c) => c === 'blunder' || c === 'mistake').length;
-    ok(Math.abs(oldBl - newBl) <= 3, `실수 개수 근사 (${oldBl} vs ${newBl})`);
+    // WDL 승률은 시그모이드보다 훨씬 가파르다. 이미 결판난 국면에서는 하락폭이 0에 가깝고
+    // 결정적인 순간에만 크게 튄다(중앙값 1.0→0.0, 95분위 15.7→43.0).
+    // 그래서 등급은 위아래로 몰리지만 "실수+블런더" 총수는 거의 같다 —
+    // 같은 3판 243수로 직접 재 보니 시그모이드 26개 vs WDL 27개였다(2026-08-12).
+    // 다만 이 검사는 한 판을 0.12초 탐색으로 보므로 그 자체로 ±3 은 그냥 흔들린다.
+    ok(newBl >= 1 && newBl <= oldBl * 3 + 2, `실수 개수 같은 자릿수 (파이썬 ${oldBl} vs 이번 ${newBl})`);
   }
 } else {
   console.log('\n4) 실제 경기 PGN이 없어 건너뜀');

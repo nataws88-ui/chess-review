@@ -9,7 +9,7 @@ on:
     tags: ['v*']
 
 env:
-  SF_VERSION: sf_17.1
+  SF_VERSION: sf_18
   SF_ASSET: stockfish-android-armv8.tar
 
 jobs:
