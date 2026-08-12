@@ -2,7 +2,7 @@
 
 import { h, nav, screen, toast, progressBar, httpGet, pickFile, keepAwake, isApp, play, adBreak } from '../ui.js';
 import { settings, setSetting, store } from '../store.js';
-import { splitPgn, peek, analyzeAndSave, fingerprint, chessComUrl, invalidate } from '../games.js';
+import { splitPgn, peek, analyzeAndSave, fingerprint, chessComUrl, lichessUrl, invalidate } from '../games.js';
 import { resultKo } from '../quizgen.js';
 
 export async function view(app) {
@@ -24,12 +24,28 @@ export async function view(app) {
   });
   paste.value = incoming;
 
-  // ---- 1. 체스닷컴 ----
-  const userInput = h('input', { type: 'text', placeholder: '체스닷컴 아이디', value: st.myName || '' });
-  const fetchBtn = h('button.btn.primary', { onclick: () => fetchChessCom() }, '최근 경기 불러오기');
+  // ---- 1. 체스닷컴 / 리체스 ----
+  let site = st.site === 'lichess' ? 'lichess' : 'chesscom';
+  const userInput = h('input', { type: 'text' });
+  const fetchBtn = h('button.btn.primary', { onclick: () => fetchOnline() }, '최근 경기 불러오기');
+
+  const seg = h('div.seg.mb',
+    h('button', { onclick: () => setSite('chesscom') }, '♞ 체스닷컴'),
+    h('button', { onclick: () => setSite('lichess') }, '🐴 리체스'));
+
+  function setSite(s) {
+    site = s;
+    setSetting('site', s);
+    Array.from(seg.children).forEach((el, k) => el.classList.toggle('on', (k === 0) === (s === 'chesscom')));
+    userInput.placeholder = s === 'lichess' ? '리체스 아이디' : '체스닷컴 아이디';
+    userInput.value = s === 'lichess' ? (st.lichessName || '') : (st.myName || '');
+  }
+  setSite(site);
+
   b.appendChild(h('div.card',
-    h('h3', '♞ 체스닷컴에서 자동으로'),
-    h('p.sub.mb', '아이디만 넣으면 최근 경기를 불러옵니다. 공개 API라 로그인은 필요 없습니다.'),
+    h('h3', '사이트에서 자동으로'),
+    h('p.sub.mb', '아이디만 넣으면 최근 경기를 불러옵니다. 둘 다 공개 API라 로그인은 필요 없습니다.'),
+    seg,
     h('div.row', { style: 'gap:8px' }, h('div', { style: 'flex:1' }, userInput)),
     h('div.mt', fetchBtn),
   ));
@@ -50,32 +66,51 @@ export async function view(app) {
 
   /* ---------------- 동작 ---------------- */
 
-  async function fetchChessCom() {
+  async function fetchOnline() {
     const user = userInput.value.trim();
     if (!user) return toast('아이디를 입력하세요');
-    await setSetting('myName', user);
+    // 통계는 myName 기준이라, 리체스 아이디는 따로 기억하되 비어 있으면 그걸 기본 이름으로 삼는다
+    if (site === 'lichess') {
+      await setSetting('lichessName', user);
+      if (!st.myName) await setSetting('myName', user);
+    } else {
+      await setSetting('myName', user);
+    }
     fetchBtn.disabled = true;
     fetchBtn.innerHTML = '<span class="spin"></span> 불러오는 중…';
     try {
-      const now = new Date();
-      let games = [];
-      for (let back = 0; back < 3 && games.length < 12; back++) {
-        const d = new Date(now.getFullYear(), now.getMonth() - back, 1);
-        try {
-          const txt = await httpGet(chessComUrl(user, d.getFullYear(), d.getMonth() + 1));
-          const j = JSON.parse(txt);
-          games = (j.games || []).concat(games);
-        } catch (e) { /* 그 달은 없을 수 있다 */ }
-      }
-      if (!games.length) throw new Error('경기를 찾지 못했습니다 (아이디를 확인하세요)');
-      games.sort((a, b2) => (b2.end_time || 0) - (a.end_time || 0));
-      showCandidates(games.slice(0, 20).map((g) => g.pgn).filter(Boolean), 'chess.com');
+      if (site === 'lichess') await fetchLichess(user);
+      else await fetchChessCom(user);
     } catch (e) {
       toast(String(e.message || e));
     } finally {
       fetchBtn.disabled = false;
       fetchBtn.textContent = '최근 경기 불러오기';
     }
+  }
+
+  async function fetchChessCom(user) {
+    const now = new Date();
+    let games = [];
+    for (let back = 0; back < 3 && games.length < 12; back++) {
+      const d = new Date(now.getFullYear(), now.getMonth() - back, 1);
+      try {
+        const txt = await httpGet(chessComUrl(user, d.getFullYear(), d.getMonth() + 1));
+        const j = JSON.parse(txt);
+        games = (j.games || []).concat(games);
+      } catch (e) { /* 그 달은 없을 수 있다 */ }
+    }
+    if (!games.length) throw new Error('경기를 찾지 못했습니다 (아이디를 확인하세요)');
+    games.sort((a, b2) => (b2.end_time || 0) - (a.end_time || 0));
+    showCandidates(games.slice(0, 20).map((g) => g.pgn).filter(Boolean), 'chess.com');
+  }
+
+  async function fetchLichess(user) {
+    // 리체스는 여러 판을 이어 붙인 PGN 한 덩어리로 준다
+    const txt = await httpGet(lichessUrl(user, 20), 'application/x-chess-pgn');
+    const parts = splitPgn(txt);
+    if (!parts.length) throw new Error('경기를 찾지 못했습니다 (아이디를 확인하세요)');
+    showCandidates(parts, 'lichess');
   }
 
   async function fromFile() {

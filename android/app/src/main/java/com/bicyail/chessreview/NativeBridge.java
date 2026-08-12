@@ -45,11 +45,29 @@ public class NativeBridge {
     @JavascriptInterface
     public int cpuCount() { return Runtime.getRuntime().availableProcessors(); }
 
+    /** 기기 전체 메모리(MB). 엔진 해시 크기를 여기에 맞춘다. 못 읽으면 0 */
+    @JavascriptInterface
+    public int memMb() {
+        try {
+            android.app.ActivityManager am =
+                    (android.app.ActivityManager) a.getSystemService(android.content.Context.ACTIVITY_SERVICE);
+            android.app.ActivityManager.MemoryInfo mi = new android.app.ActivityManager.MemoryInfo();
+            am.getMemoryInfo(mi);
+            return (int) (mi.totalMem / (1024L * 1024L));
+        } catch (Throwable t) { return 0; }
+    }
+
     // ---------------- 네트워크 (Chess.com 가져오기) ----------------
     // WebView에서 직접 fetch하면 CORS에 걸릴 수 있어 네이티브로 받아 넘긴다.
 
     @JavascriptInterface
     public void httpGet(final String url, final String reqId) {
+        httpGetAs(url, reqId, "application/json, text/plain, */*");
+    }
+
+    /** 리체스처럼 Accept 헤더로 응답 형식이 갈리는 API 를 위해 */
+    @JavascriptInterface
+    public void httpGetAs(final String url, final String reqId, final String accept) {
         new Thread(() -> {
             int status = 0;
             String body = "";
@@ -61,7 +79,8 @@ public class NativeBridge {
                 c.setConnectTimeout(15000);
                 c.setReadTimeout(30000);
                 c.setRequestProperty("User-Agent", "ChessReview/1.0 (Android app; personal chess review)");
-                c.setRequestProperty("Accept", "application/json, text/plain, */*");
+                c.setRequestProperty("Accept", accept == null || accept.isEmpty()
+                        ? "application/json, text/plain, */*" : accept);
                 status = c.getResponseCode();
                 InputStream is = (status >= 200 && status < 400) ? c.getInputStream() : c.getErrorStream();
                 if (is != null) {

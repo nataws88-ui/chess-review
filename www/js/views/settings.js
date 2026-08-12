@@ -1,8 +1,8 @@
 /* ⚙️ 설정 · 데이터 이전 · 정보 */
 
-import { h, nav, screen, toast, clear, saveFile, pickFile, isApp, Native } from '../ui.js';
+import { h, nav, screen, toast, clear, saveFile, pickFile, isApp, Native, applyTheme } from '../ui.js';
 import { settings, setSetting, store, getSrs, setSrs, DEFAULTS } from '../store.js';
-import { THEMES } from '../board.js';
+import { THEMES, renderBoard } from '../board.js';
 import { peek, fingerprint, gameId, invalidate } from '../games.js';
 import { buildGame } from '../quizgen.js';
 
@@ -12,6 +12,8 @@ const POLICY_URL = 'https://nataws88-ui.github.io/chess-review/store/privacy-pol
 
 const MOVETIMES = [[150, '빠름'], [250, '보통'], [500, '정밀'], [1000, '최고']];
 const THEME_KO = { green: '클래식 그린', wood: '우드', ocean: '오션', slate: '슬레이트' };
+// 견본 판 — 양쪽 기물이 밝은 칸·어두운 칸에 골고루 놓인 국면
+const SAMPLE_FEN = 'r1bqk2r/pppp1ppp/2n2n2/2b1p3/2B1P3/2N2N2/PPPP1PPP/R1BQK2R w KQkq - 0 1';
 
 export async function view(app) {
   const st = await settings();
@@ -26,10 +28,16 @@ export async function view(app) {
     invalidate();
     toast('저장했습니다');
   });
+  const liInput = h('input', { type: 'text', value: st.lichessName || '', placeholder: '리체스 아이디 (안 쓰면 비워두세요)' });
+  liInput.addEventListener('change', async () => {
+    await setSetting('lichessName', liInput.value.trim());
+    toast('저장했습니다');
+  });
   b.appendChild(h('div.card',
     h('h3', '내 아이디'),
-    h('p.sub.mb', '체스닷컴 아이디. 어느 쪽이 내 수인지 판단하는 기준입니다.'),
-    nameInput));
+    h('p.sub.mb', '어느 쪽이 내 수인지 판단하는 기준입니다. 통계는 이 이름으로 냅니다.'),
+    nameInput,
+    h('div.mt', liInput)));
 
   /* ---- 분석 ---- */
   const mtChips = h('div.chips');
@@ -51,6 +59,12 @@ export async function view(app) {
     h('label.fld.mt', h('span.k', '하루에 새로 배울 문제 수'), newPer)));
 
   /* ---- 화면 ---- */
+  // 판 색·밝기는 고른 즉시 바로 아래 견본에 반영된다 (경기 화면까지 안 가봐도 되게)
+  const sample = h('div.board-wrap', { style: 'max-width:220px;margin:0 auto 12px' });
+  const drawSample = () => renderBoard(sample, SAMPLE_FEN, {
+    theme: st.boardTheme, shade: st.boardShade, coords: st.showCoords,
+  });
+
   const themeChips = h('div.chips.mb');
   Object.keys(THEMES).forEach((k) => {
     themeChips.appendChild(h('button.chip' + (st.boardTheme === k ? '.on' : ''), {
@@ -58,8 +72,21 @@ export async function view(app) {
         await setSetting('boardTheme', k);
         Array.from(themeChips.children).forEach((c) => c.classList.remove('on'));
         e.target.classList.add('on');
+        drawSample();
       },
     }, THEME_KO[k] || k));
+  });
+
+  const SHADE_KO = [['0', '밝게'], ['1', '진하게'], ['2', '더 진하게']];
+  const shadeSeg = h('div.seg.mb');
+  SHADE_KO.forEach(([v, label]) => {
+    shadeSeg.appendChild(h('button' + (String(st.boardShade) === v ? '.on' : ''), {
+      onclick: async () => {
+        await setSetting('boardShade', +v);
+        Array.from(shadeSeg.children).forEach((el, i) => el.classList.toggle('on', SHADE_KO[i][0] === v));
+        drawSample();
+      },
+    }, label));
   });
   const sw = (key, label) => {
     const el = h('div.sw' + (st[key] ? '.on' : ''));
@@ -71,14 +98,44 @@ export async function view(app) {
       },
     }, h('span', label), el);
   };
+  // 앱 전체 밝기 테마
+  const APP_THEMES = [['dark', '어두움'], ['light', '밝음'], ['auto', '기기 설정']];
+  const appTheme = h('div.seg.mb');
+  APP_THEMES.forEach(([k, label]) => {
+    appTheme.appendChild(h('button' + (st.theme === k ? '.on' : ''), {
+      onclick: async () => {
+        await setSetting('theme', k);
+        applyTheme(k);
+        Array.from(appTheme.children).forEach((el, i) => el.classList.toggle('on', APP_THEMES[i][0] === k));
+      },
+    }, label));
+  });
+
+  const speed = h('input', { type: 'number', min: 3, max: 30, step: 1, value: Math.round((st.autoplayMs || 900) / 100) });
+  speed.addEventListener('change', () => {
+    const v = Math.max(3, Math.min(30, +speed.value || 9));
+    speed.value = v;
+    setSetting('autoplayMs', v * 100);
+  });
+
   b.appendChild(h('div.card',
     h('h3', '화면'),
+    h('p.sub.mb', '앱 테마'),
+    appTheme,
     h('p.sub.mb', '판 색'),
     themeChips,
+    h('p.sub.mb', '판 밝기 — 어두운 곳에서 눈이 부시면 진하게 두세요'),
+    shadeSeg,
+    sample,
     sw('showCoords', '좌표 표시 (a~h, 1~8)'),
     sw('animate', '기물 이동 애니메이션'),
+    sw('evalBar', '복기할 때 판 옆에 승률 막대'),
+    sw('swipeMove', '판을 좌우로 밀어 수 이동'),
     sw('sound', '소리'),
-    sw('haptic', '진동')));
+    sw('haptic', '진동'),
+    h('label.fld.mt', { style: 'margin-top:12px' },
+      h('span.k', '자동 재생 간격 (0.1초 단위 — 9 = 0.9초)'), speed)));
+  drawSample();
 
   /* ---- 데이터 ---- */
   const dataBox = h('div.card',
@@ -212,18 +269,20 @@ export async function about(app) {
   b.appendChild(h('div.card',
     h('h3', '♟️ 체스 복기왕'),
     h('p.sub', `버전 ${ver}`),
-    h('p.sub.mt', '내가 둔 경기를 엔진으로 분석해 실수를 문제로 만들고, 안키식 간격 반복으로 복습하는 앱입니다. 인터넷은 체스닷컴에서 경기를 가져올 때와 광고를 받을 때만 씁니다.')));
+    h('p.sub.mt', '내가 둔 경기를 엔진으로 분석해 실수를 문제로 만들고, 안키식 간격 반복으로 복습하는 앱입니다. 인터넷은 체스닷컴·리체스에서 경기를 가져올 때와 광고를 받을 때만 씁니다.')));
 
   b.appendChild(h('div.card',
     h('h3', '엔진'),
-    h('p.sub', 'Stockfish 17.1 (arm64 네이티브)'),
+    h('p.sub', 'Stockfish 18 (arm64 네이티브 · SFNNv10 신경망)'),
     h('p.dim', enginePath),
+    h('p.dim.mt', '17.1 대비 최대 46 Elo 강해졌고, 승률은 엔진이 직접 내놓는 승/무/패 확률(WDL)로 계산합니다.'),
     h('button.btn.sm.wide.mt', {
       onclick: async () => {
         try {
           const eng = (await import('../engine.js')).default;
           await eng.start();
-          toast('엔진 정상: ' + (eng.id.name || 'Stockfish'));
+          toast(`엔진 정상: ${eng.id.name || 'Stockfish'} · 스레드 ${eng.options.Threads} · 해시 ${eng.options.Hash}MB`
+            + (eng.wdl ? ' · WDL 켜짐' : ''));
         } catch (e) { toast('엔진 오류: ' + (e.message || e)); }
       },
     }, '엔진 상태 확인')));
@@ -236,7 +295,7 @@ export async function about(app) {
 
   b.appendChild(h('div.card',
     h('h3', '오픈소스 라이선스'),
-    lic('Stockfish 17.1', 'GNU General Public License v3', 'https://github.com/official-stockfish/Stockfish',
+    lic('Stockfish 18', 'GNU General Public License v3', 'https://github.com/official-stockfish/Stockfish',
       '이 앱은 스톡피시를 그대로 실행합니다. GPLv3에 따라 이 앱의 소스도 공개합니다.'),
     lic('chess.js 1.4.0', 'BSD 2-Clause', 'https://github.com/jhlywa/chess.js', '수 생성·PGN 파싱'),
     lic('체스 기물 이미지', 'GFDL / BSD / GPL', 'https://commons.wikimedia.org/wiki/Category:SVG_chess_pieces',

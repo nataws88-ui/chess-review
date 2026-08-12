@@ -11,7 +11,15 @@ class Engine {
     this.queue = Promise.resolve();
     this.id = { name: '', author: '' };
     this.options = { Threads: 2, Hash: 128 };
+    this.supports = new Set();   // 엔진이 알려준 setoption 이름들
+    this.wdl = false;            // UCI_ShowWDL 켜졌나 (스톡피시 실측 승률)
     this._install();
+  }
+
+  /** "Stockfish 18" → 18 (없으면 0) */
+  get major() {
+    const m = /(\d+)/.exec(this.id.name || '');
+    return m ? parseInt(m[1], 10) : 0;
   }
 
   get available() {
@@ -76,13 +84,25 @@ class Engine {
 
     const cpus = (n.cpuCount && n.cpuCount()) || 4;
     this.options.Threads = Math.max(1, Math.min(8, cpus - 1));
+    // 해시는 기기 메모리에 맞춘다 — 작게 잡으면 깊이가 안 나오고, 크게 잡으면 앱이 죽는다
+    const memMb = (n.memMb && n.memMb()) || 0;
+    this.options.Hash = memMb ? Math.max(64, Math.min(512, 1 << Math.floor(Math.log2(memMb / 16)))) : 128;
     Object.assign(this.options, opts);
 
     const p = this._collect((l) => l.trim() === 'uciok', 15000);
     this.send('uci');
-    await p;
+    const hello = await p;
+
+    this.supports = new Set();
+    for (const l of hello) {
+      const m = /^option name (.+?) type /.exec(l);
+      if (m) this.supports.add(m[1]);
+    }
 
     for (const [k, v] of Object.entries(this.options)) this.send(`setoption name ${k} value ${v}`);
+    // 스톡피시가 직접 내놓는 승/무/패 확률 — 시그모이드 근사보다 정확하다
+    this.wdl = this.supports.has('UCI_ShowWDL');
+    if (this.wdl) this.send('setoption name UCI_ShowWDL value true');
     this.send('ucinewgame');
     const p2 = this._collect((l) => l.trim() === 'readyok', 15000);
     this.send('isready');
@@ -235,15 +255,26 @@ class Engine {
 }
 
 function parseInfo(line) {
-  if (!line) return { cp: null, mate: null, pv: [] };
+  if (!line) return { cp: null, mate: null, pv: [], wdl: null };
   const mate = /score mate (-?\d+)/.exec(line);
   const cp = /score cp (-?\d+)/.exec(line);
   const pv = /(?: pv )(.+)$/.exec(line);
+  const wdl = / wdl (\d+) (\d+) (\d+)/.exec(line);
   return {
     cp: cp ? parseInt(cp[1], 10) : null,
     mate: mate ? parseInt(mate[1], 10) : null,
     pv: pv ? pv[1].trim().split(/\s+/) : [],
+    // 둘 차례 쪽 관점의 천분율 (승, 무, 패)
+    wdl: wdl ? [+wdl[1], +wdl[2], +wdl[3]] : null,
   };
+}
+
+/** WDL(천분율) → 둘 차례 쪽 기대 득점% (무승부는 0.5점) */
+export function wdlPct(wdl) {
+  if (!wdl) return null;
+  const tot = wdl[0] + wdl[1] + wdl[2];
+  if (!tot) return null;
+  return ((wdl[0] + wdl[1] / 2) / tot) * 100;
 }
 
 /** UCI 점수 → 파이썬판과 동일한 정수 스코어 (mate_score=10000) */

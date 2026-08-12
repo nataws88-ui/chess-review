@@ -58,6 +58,11 @@ const START = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 // 1) 시작 국면 (기본 테마)
 render('01-start', START, { orient: 'w', theme: 'green' });
 
+// 판 밝기 3단계 — 눈으로 비교해 고를 수 있게 같은 국면을 세 장 뽑는다
+for (const lv of [0, 1, 2]) {
+  render(`00-shade-${lv}`, START, { orient: 'w', theme: 'green', shade: lv, coords: true });
+}
+
 // 2) 문제 화면: 직전 수 표시 + 기물 선택 + 갈 수 있는 칸
 const m2 = {};
 addMark(m2, 'e7', 'hl'); addMark(m2, 'e5', 'hl');

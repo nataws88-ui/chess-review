@@ -1,9 +1,37 @@
 /* 게임 가져오기·분석·저장 파이프라인 */
 
 import { Chess } from './lib/chess.js';
-import { analyzeGame } from './analyze.js';
+import { analyzeGame, gameAccuracy } from './analyze.js';
 import { buildGame } from './quizgen.js';
 import { store, settings } from './store.js';
+
+/** 현재 정확도 계산 방식 번호 — analyze.js 의 report.accv 와 같아야 한다 */
+const ACCV = 3;
+
+/* 정확도 계산 방식이 1.2.0 에서 바뀌었다(단순평균 → 단순+변동성가중 반반).
+ * 예전 경기와 새 경기의 숫자가 섞이면 추이 그래프가 거짓말을 하므로,
+ * 저장해 둔 승률 배열로 옛 경기의 정확도를 한 번 다시 계산해 맞춘다.
+ * 승률 배열은 그대로 두므로 되돌릴 수 없는 변경이 아니다. */
+export async function migrateAccuracy() {
+  const games = await store.allGames();
+  let fixed = 0;
+  for (const g of games) {
+    const r = g.report;
+    if (!r || r.accv === ACCV || !Array.isArray(r.wp) || r.wp.length < 2) continue;
+    const acc = gameAccuracy([r.wp0 == null ? 50 : r.wp0, ...r.wp]);
+    r.acc = acc;
+    r.accv = ACCV;
+    r.est = {
+      w: Math.max(400, Math.min(2800, Math.round((acc.w * 25 - 480) / 10) * 10)),
+      b: Math.max(400, Math.min(2800, Math.round((acc.b * 25 - 480) / 10) * 10)),
+    };
+    g.acc = acc;
+    await store.putGame(g);
+    fixed++;
+  }
+  if (fixed) invalidate();
+  return fixed;
+}
 
 /** 여러 판이 이어 붙은 PGN을 게임 단위로 자른다 */
 export function splitPgn(text) {
@@ -49,6 +77,7 @@ export function peek(pgn) {
       white: hdr.White || '?', black: hdr.Black || '?',
       welo: hdr.WhiteElo || '', belo: hdr.BlackElo || '',
       date: (hdr.Date || hdr.UTCDate || '').replace(/\./g, '-'),
+      time: hdr.UTCTime || hdr.StartTime || '',
       result: hdr.Result || '*', termination: hdr.Termination || '',
       timeControl: hdr.TimeControl || '', link: hdr.Link || '',
     },
@@ -133,4 +162,11 @@ export async function allCards() {
 /** Chess.com 공개 API에서 특정 달의 경기 목록 */
 export function chessComUrl(user, y, m) {
   return `https://api.chess.com/pub/player/${encodeURIComponent(user.toLowerCase())}/games/${y}/${String(m).padStart(2, '0')}`;
+}
+
+/** 리체스 공개 API — 최근 경기를 PGN 으로 한 번에 받는다(로그인 불필요).
+ *  clocks=true 라야 %clk 주석이 붙어 시간 분석이 된다. */
+export function lichessUrl(user, max = 20) {
+  return `https://lichess.org/api/games/user/${encodeURIComponent(user)}`
+    + `?max=${Math.max(1, Math.min(100, max))}&clocks=true&evals=false&opening=false&literate=false`;
 }

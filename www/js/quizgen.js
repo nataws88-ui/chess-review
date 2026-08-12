@@ -182,6 +182,8 @@ export function buildGame(rec, myName = '', opts = {}) {
   const pvs = (report && report.pvs) || [];
   const deep = (report && report.deep) || {};
   const verify = (report && report.verify) || {};
+  const think = (report && report.think) || null;    // 수마다 쓴 시간(초)
+  const clk = (report && report.clk) || null;        // 수를 두고 난 뒤 남은 시간(초)
   const gems = new Map(((report && report.gems) || []).map((g) => [g.i, g]));
 
   const plies = [];
@@ -247,10 +249,16 @@ export function buildGame(rec, myName = '', opts = {}) {
       }
     }
 
+    const dpv = deep[i] || {};      // 깊게 다시 본 국면이면 후보수·응징 수순이 들어 있다
     plies.push({
-      san: m.san, glyph, frm: m.from, to: m.to, fen: m.after,
+      san: m.san, glyph, frm: m.from, to: m.to, fen: m.after, fenBefore,
       hint: best || '', mn, side, cls: dcls[i] || c, raw: c,
-      bestLine: lineMoves(fenBefore, pvs[i] || (best ? [best] : []), 3),
+      bestLine: lineMoves(fenBefore, dpv.best || pvs[i] || (best ? [best] : []), 3),
+      // 깊게 다시 본 수에만 붙는다 — 후보수 3개와 상대의 응징 수순
+      alts: dpv.alts || null,
+      punish: dpv.punish || null,
+      think: think ? think[i] : null,
+      clk: clk ? clk[i] : null,
     });
   }
 

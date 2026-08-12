@@ -90,7 +90,7 @@ export async function view(app) {
       if (king) addMark(marks, king, 'check');
     }
     renderBoard(boardHost, chess.fen(), {
-      orient: myColor, marks, theme: st.boardTheme, coords: st.showCoords,
+      orient: myColor, marks, theme: st.boardTheme, shade: st.boardShade, coords: st.showCoords,
       anim: st.animate ? anim : null,
       onSquare: over || thinking ? null : onSquare,
     });
@@ -218,7 +218,7 @@ export async function view(app) {
       const c = new Chess(chess.fen());
       const m = c.move({ from: r.best.slice(0, 2), to: r.best.slice(2, 4), promotion: r.best.slice(4, 5) || undefined });
       renderBoard(boardHost, chess.fen(), {
-        orient: myColor, theme: st.boardTheme, coords: st.showCoords,
+        orient: myColor, theme: st.boardTheme, shade: st.boardShade, coords: st.showCoords,
         arrows: [{ f: r.best.slice(0, 2), t: r.best.slice(2, 4), kind: 'hint' }],
         onSquare,
       });

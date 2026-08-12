@@ -48,12 +48,19 @@ export const DEFAULTS = {
   myName: '',              // 내 아이디 (내 실수만 훈련 / 통계 기준)
   movetime: 250,           // 수당 분석 시간(ms)
   boardTheme: 'green',
+  boardShade: 2,           // 판 밝기 0=밝게 1=진하게 2=더 진하게(기본)
   sound: true,
   haptic: true,
   showCoords: true,
   animate: true,
   sparElo: 1200,
   newPerDay: 10,
+  theme: 'dark',           // dark | light | auto (기기 설정 따라감)
+  evalBar: true,           // 복기 화면에서 판 옆 승률 막대
+  swipeMove: true,         // 판을 좌우로 밀어 수 이동
+  autoplayMs: 900,         // 자동 재생 간격
+  site: 'chesscom',        // 기본 가져오기 사이트 (chesscom | lichess)
+  lichessName: '',
 };
 
 let _settings = null;

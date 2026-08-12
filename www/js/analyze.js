@@ -1,52 +1,15 @@
-/* PGN 엔진 분석 — 기존 analyze.py를 그대로 옮긴 것(승률 공식·분류 기준 동일).
- * 다른 점: 2차 엔진(GNU Chess) 대신 "깊은 재탐색"으로 실수를 재검증한다. */
+/* PGN 엔진 분석.
+ *
+ * 뿌리는 기존 analyze.py 지만 아래 세 가지가 달라졌다.
+ *  - 2차 엔진(GNU Chess) 대신 "깊은 재탐색"으로 실수를 재검증한다.
+ *  - 승률은 스톡피시가 직접 내놓는 WDL(승/무/패 확률)을 쓴다. 못 쓰면 시그모이드로 되돌아간다.
+ *  - 정확도는 단순 평균이 아니라 변동성 가중평균과 반반으로 섞은 값이다. */
 
 import { Chess } from './lib/chess.js';
-import engine, { toScore } from './engine.js';
+import engine, { toScore, wdlPct } from './engine.js';
+import { findOpening } from './openings.js';
 
-/* (이름, SAN 수순) — 긴 수순 우선 매치 */
-const OPENINGS = [
-  ['C57 프라이드 리버 어택', 'e4 e5 Nf3 Nc6 Bc4 Nf6 Ng5 d5 exd5 Nxd5 Nxf7'],
-  ['C50 세미 이탈리안', 'e4 e5 Nf3 Nc6 Bc4 d6'],
-  ['C50 이탈리안 게임', 'e4 e5 Nf3 Nc6 Bc4 Bc5'],
-  ['C55 두 나이트 방어', 'e4 e5 Nf3 Nc6 Bc4 Nf6'],
-  ['C50 이탈리안 게임', 'e4 e5 Nf3 Nc6 Bc4'],
-  ['C46 포 나이츠 게임', 'e4 e5 Nf3 Nc6 Nc3 Nf6'],
-  ['C60 루이 로페즈', 'e4 e5 Nf3 Nc6 Bb5'],
-  ['C44 스카치 게임', 'e4 e5 Nf3 Nc6 d4'],
-  ['C40 엘리펀트 갬빗', 'e4 e5 Nf3 d5'],
-  ['C41 필리도어 방어', 'e4 e5 Nf3 d6'],
-  ['C42 페트로프 방어', 'e4 e5 Nf3 Nf6'],
-  ['C40 킹스 나이트 오프닝', 'e4 e5 Nf3'],
-  ['C23 비숍 오프닝', 'e4 e5 Bc4'],
-  ['C25 비엔나 게임', 'e4 e5 Nc3'],
-  ['C30 킹스 갬빗', 'e4 e5 f4'],
-  ['C20 웨이워드 퀸', 'e4 e5 Qh5'],
-  ['B50 시실리안 방어', 'e4 c5 Nf3 d6'],
-  ['B30 시실리안 방어', 'e4 c5 Nf3 Nc6'],
-  ['B22 시실리안 알라핀', 'e4 c5 c3'],
-  ['B20 시실리안 방어', 'e4 c5'],
-  ['C00 프렌치 방어', 'e4 e6'],
-  ['B10 카로-칸 방어', 'e4 c6'],
-  ['B01 스칸디나비안 방어', 'e4 d5'],
-  ['B07 피르츠 방어', 'e4 d6'],
-  ['B06 모던 방어', 'e4 g6'],
-  ['B02 알레킨 방어', 'e4 Nf6'],
-  ['D10 슬라브 방어', 'd4 d5 c4 c6'],
-  ['D30 퀸스 갬빗 거절', 'd4 d5 c4 e6'],
-  ['D20 퀸스 갬빗 수락', 'd4 d5 c4 dxc4'],
-  ['D06 퀸스 갬빗', 'd4 d5 c4'],
-  ['D02 런던 시스템', 'd4 d5 Nf3 Nf6 Bf4'],
-  ['D00 런던 시스템', 'd4 d5 Bf4'],
-  ['E60 킹스 인디언 방어', 'd4 Nf6 c4 g6'],
-  ['A80 더치 방어', 'd4 f5'],
-  ['A45 인디언 게임', 'd4 Nf6'],
-  ['D00 퀸스 폰 게임', 'd4 d5'],
-  ['A10 잉글리시 오프닝', 'c4'],
-  ['A04 레티 오프닝', 'Nf3'],
-  ['B00 킹스 폰 게임', 'e4'],
-  ['A40 퀸스 폰 게임', 'd4'],
-];
+export { findOpening };
 
 /** centipawn → 승률%(백 관점, lichess 공식) */
 export function wp(cp) {
@@ -59,6 +22,10 @@ export function moveAcc(drop) {
   return Math.max(0, Math.min(100, 103.1668 * Math.exp(-0.04354 * Math.max(0, drop)) - 3.1669));
 }
 
+/* 등급 경계(승률 하락 %p). 시그모이드 시절에 맞춰 잡은 값을 WDL 로 바꾼 뒤에도 그대로 둔다.
+ * 같은 3판 243수로 두 모델을 직접 비교해 보니 "실수+블런더" 총수가 26 vs 27 로 거의 같았다.
+ * 대신 WDL 은 분포가 양 끝으로 몰린다 — 이미 결판난 국면의 수는 하락폭이 0 이고,
+ * 승부가 걸린 수만 크게 튄다. 등급이 최고·우수와 블런더 쪽으로 갈리는 건 그래서다. */
 export function classify(played, best, drop) {
   if (best && played === best) return 'best';
   if (drop < 2) return 'excellent';
@@ -68,14 +35,96 @@ export function classify(played, best, drop) {
   return 'blunder';
 }
 
-export function findOpening(sans) {
-  let best = ['오프닝 불명', 0];
-  for (const [name, seq] of OPENINGS) {
-    const toks = seq.split(' ');
-    if (toks.length > sans.length) continue;
-    if (toks.every((t, i) => sans[i] === t) && toks.length > best[1]) best = [name, toks.length];
+/* ---------------- 정확도 ----------------
+ * 수마다 낸 정확도를 그냥 평균 내면, 이미 이기고 있어 아무 수나 둬도 되는 국면이
+ * 실제 어려웠던 국면과 같은 무게를 갖는다. 그래서 국면이 요동치던 구간
+ * (승률 표준편차)에 가중치를 준 평균을 함께 내고, 단순평균과 반반으로 섞는다.
+ *
+ * 이 비율은 짐작이 아니라 맞춰본 값이다 — 체스닷컴이 직접 매긴 정확도가 있는
+ * 실제 경기 6판(12명분)과 대조했다(2026-08-12):
+ *     단순평균만       편차 +3.8  평균오차 5.0
+ *     가중평균만       편차 -3.5  평균오차 5.0
+ *     반반(채택)       편차 +0.1  평균오차 3.3
+ *     리체스식(조화평균 섞기)  편차 -14.3 → 우리 승률 모델(WDL)과 겹쳐 과하게 깎였다
+ * 조화평균을 안 쓰는 이유가 이것이다. WDL 승률은 리체스의 시그모이드보다
+ * 훨씬 가파르게 움직여서, 조화평균까지 얹으면 같은 실수를 두 번 벌준다. */
+
+function stdev(xs) {
+  if (xs.length < 2) return 0;
+  const m = xs.reduce((a, b) => a + b, 0) / xs.length;
+  return Math.sqrt(xs.reduce((a, b) => a + (b - m) * (b - m), 0) / xs.length);
+}
+
+/**
+ * @param {number[]} winsWhite 국면별 백 관점 기대득점% — [시작국면, 1수 뒤, 2수 뒤, …]
+ * @returns {{w:number, b:number}} 색깔별 정확도%
+ */
+export function gameAccuracy(winsWhite) {
+  const N = winsWhite.length;
+  if (N < 2) return { w: 0, b: 0 };
+  const win = Math.max(2, Math.min(8, Math.floor(N / 10)));
+
+  // 앞쪽 수들도 창을 가지도록 첫 창을 (win-1)번 채워 넣는다
+  const windows = [];
+  const head = winsWhite.slice(0, win);
+  for (let k = 0; k < win - 1; k++) windows.push(head);
+  for (let i = 0; i + win <= N; i++) windows.push(winsWhite.slice(i, i + win));
+  const weights = windows.map((xs) => Math.max(0.5, Math.min(12, stdev(xs))));
+
+  const acc = { w: [], b: [] };
+  const wt = { w: [], b: [] };
+  for (let i = 0; i + 1 < N; i++) {
+    const side = i % 2 === 0 ? 'w' : 'b';
+    const prev = side === 'w' ? winsWhite[i] : 100 - winsWhite[i];
+    const next = side === 'w' ? winsWhite[i + 1] : 100 - winsWhite[i + 1];
+    acc[side].push(moveAcc(prev - next));
+    wt[side].push(weights[i] == null ? 0.5 : weights[i]);
   }
-  return best;
+
+  const out = {};
+  for (const s of ['w', 'b']) {
+    const a = acc[s], g = wt[s];
+    if (!a.length) { out[s] = 0; continue; }
+    const sum = g.reduce((x, y) => x + y, 0) || 1;
+    const weighted = a.reduce((x, v, i) => x + v * g[i], 0) / sum;
+    const mean = a.reduce((x, v) => x + v, 0) / a.length;
+    out[s] = Math.round(((weighted + mean) / 2) * 10) / 10;
+  }
+  return out;
+}
+
+/* ---------------- 시간 (PGN 의 %clk 주석) ---------------- */
+
+/** PGN → 수마다 "그 수를 두고 난 뒤 남은 시간(초)" */
+export function parseClocks(pgn) {
+  const out = [];
+  const rx = /\[%clk\s+(\d+):(\d+):(\d+(?:\.\d+)?)\]/g;
+  let m;
+  while ((m = rx.exec(String(pgn || '')))) out.push(+m[1] * 3600 + +m[2] * 60 + parseFloat(m[3]));
+  return out;
+}
+
+/** "600+5" → {base:600, inc:5} */
+export function parseTimeControl(tc) {
+  const m = /^(\d+)(?:\+(\d+))?/.exec(String(tc || ''));
+  if (!m) return null;
+  return { base: +m[1], inc: m[2] ? +m[2] : 0 };
+}
+
+/** 남은 시간 배열 → 수마다 실제로 쓴 시간(초). 못 구하면 null */
+export function thinkTimes(clocks, tc) {
+  if (!clocks || clocks.length < 2) return null;
+  const t = parseTimeControl(tc);
+  const inc = t ? t.inc : 0;
+  const base = t ? t.base : clocks[0] + clocks[1] > 0 ? Math.max(clocks[0], clocks[1]) : 0;
+  const out = [];
+  for (let i = 0; i < clocks.length; i++) {
+    const before = i >= 2 ? clocks[i - 2] : base;
+    const spent = before - clocks[i] + inc;
+    // 시계가 없거나 튄 값은 버린다
+    out.push(spent >= 0 && spent < 24 * 3600 ? Math.round(spent * 10) / 10 : null);
+  }
+  return out;
 }
 
 /** UCI 수순 → SAN 배열 */
@@ -146,10 +195,24 @@ export async function analyzeGame(pgn, opts = {}) {
 
   await engine.start();
 
+  /** 탐색 결과 → "둘 차례 쪽" 기대득점%. 엔진이 WDL을 주면 그걸 쓰고, 없으면 시그모이드 */
+  const moverWin = (r) => {
+    const p = wdlPct(r && r.wdl);
+    return p == null ? wp(toScore(r)) : p;
+  };
+
+  /** 탐색 결과 → 백 관점 기대득점% */
+  const whiteWin = (r, whiteToMove, cpWhite) => {
+    const p = wdlPct(r && r.wdl);
+    if (p == null) return wp(cpWhite);
+    return whiteToMove ? p : 100 - p;
+  };
+
   // ---- 1차: 전 국면 스캔 ----
-  const evals = [];   // [{cp(백관점), best(SAN)}]
+  const evals = [];   // [{cp(백관점), w(백관점 기대득점%), best(SAN)}]
   const pvs = [];     // [[SAN x3]]
   const sans = moves.map((m) => m.san);
+  let usedWdl = false;
 
   for (let i = 0; i < n; i++) {
     chk();
@@ -158,21 +221,24 @@ export async function analyzeGame(pgn, opts = {}) {
     const whiteToMove = fen.split(' ')[1] === 'w';
     const raw = toScore(r);
     const cp = whiteToMove ? raw : -raw;
+    if (r.wdl) usedWdl = true;
     const line = uciToSan(fen, r.pv, 3);
     pvs.push(line);
-    evals.push({ cp, best: line[0] || null });
+    evals.push({ cp, w: whiteWin(r, whiteToMove, cp), best: line[0] || null });
     prog({ phase: 'scan', i: i + 1, n });
   }
 
   // 마지막 국면
   const last = new Chess(moves[n - 1].after);
-  let finalCp;
+  let finalCp, finalW;
   if (last.isGameOver()) {
     finalCp = last.isCheckmate() ? (last.turn() === 'w' ? -10000 : 10000) : 0;
+    finalW = last.isCheckmate() ? (last.turn() === 'w' ? 0 : 100) : 50;
   } else {
     const r = await engine.analyse(moves[n - 1].after, { movetime });
     const whiteToMove = last.turn() === 'w';
     finalCp = whiteToMove ? toScore(r) : -toScore(r);
+    finalW = whiteWin(r, whiteToMove, finalCp);
   }
 
   const [opening, book] = findOpening(sans);
@@ -191,7 +257,6 @@ export async function analyzeGame(pgn, opts = {}) {
   // ---- 수별 분류·통계 ----
   const wps = [], cls = [], mw = [];
   const counts = { w: {}, b: {} };
-  const accs = { w: [], b: [] };
   const accsPh = { w: [[], [], []], b: [[], [], []] };
   const cpls = { w: [], b: [] };
   const flagged = [];
@@ -199,12 +264,13 @@ export async function analyzeGame(pgn, opts = {}) {
   for (let i = 0; i < n; i++) {
     const whiteMoved = moves[i].color === 'w';
     const side = whiteMoved ? 'w' : 'b';
-    const { cp: cpBefore, best } = evals[i];
+    const { cp: cpBefore, w: wwBefore, best } = evals[i];
     const cpAfter = i + 1 < n ? evals[i + 1].cp : finalCp;
-    const wB = whiteMoved ? wp(cpBefore) : 100 - wp(cpBefore);
-    const wA = whiteMoved ? wp(cpAfter) : 100 - wp(cpAfter);
+    const wwAfter = i + 1 < n ? evals[i + 1].w : finalW;
+    const wB = whiteMoved ? wwBefore : 100 - wwBefore;
+    const wA = whiteMoved ? wwAfter : 100 - wwAfter;
     const drop = wB - wA;
-    wps.push(Math.round(wp(cpAfter) * 10) / 10);
+    wps.push(Math.round(wwAfter * 10) / 10);
 
     const c = i < book ? 'book' : classify(sans[i], best, drop);
     cls.push(c);
@@ -213,7 +279,6 @@ export async function analyzeGame(pgn, opts = {}) {
     counts[side][c] = (counts[side][c] || 0) + 1;
 
     const a = moveAcc(drop);
-    accs[side].push(a);
     const ph = i < openEnd ? 0 : (i >= endStart ? 2 : 1);
     accsPh[side][ph].push(a);
     cpls[side].push(Math.min(1000, Math.max(0, whiteMoved ? cpBefore - cpAfter : cpAfter - cpBefore)));
@@ -228,10 +293,26 @@ export async function analyzeGame(pgn, opts = {}) {
   for (let k = 0; k < flagged.length; k++) {
     chk();
     const fl = flagged[k];
-    const whiteToMove = fl.fen.split(' ')[1] === 'w';
     try {
-      const r1 = await engine.analyse(fl.fen, { movetime: deepTime });
+      // 후보수 3개를 한 번에 — 최선 말고 어떤 선택지가 있었는지 보여준다
+      const rs = await engine.analyseMulti(fl.fen, { movetime: deepTime, multipv: 3 });
+      const r1 = rs[0];
+      if (!r1) { prog({ phase: 'deep', i: k + 1, n: flagged.length }); continue; }
       const bestLine = uciToSan(fl.fen, r1.pv, 4);
+
+      const alts = [];
+      for (const r of rs) {
+        if (!r || !r.pv || !r.pv.length) continue;
+        const line = uciToSan(fl.fen, r.pv, 3);
+        if (!line.length) continue;
+        alts.push({
+          san: line[0],
+          cp: toScore(r),                                  // 둔 쪽 관점
+          w: Math.round(moverWin(r) * 10) / 10,
+          line,
+          played: line[0] === fl.san,
+        });
+      }
 
       const after = new Chess(fl.fen);
       after.move(fl.san);
@@ -239,13 +320,11 @@ export async function analyzeGame(pgn, opts = {}) {
       const r2 = await engine.analyse(fenAfter, { movetime: deepTime });
       const punishLine = uciToSan(fenAfter, r2.pv, 3);
 
-      deep[fl.i] = { best: bestLine, punish: punishLine };
+      deep[fl.i] = { best: bestLine, punish: punishLine, alts };
 
       // 깊은 탐색 기준으로 손해를 다시 계산 — 얕은 판정의 오탐을 걸러낸다
-      const cp1 = whiteToMove ? toScore(r1) : -toScore(r1);
-      const cp2 = whiteToMove ? toScore(r2) : -toScore(r2);
-      const w1 = whiteToMove ? wp(cp1) : 100 - wp(cp1);
-      const w2 = whiteToMove ? wp(cp2) : 100 - wp(cp2);
+      const w1 = moverWin(r1);              // 최선을 뒀을 때 (둔 쪽 관점)
+      const w2 = 100 - moverWin(r2);        // 실전 수를 둔 뒤, 상대 차례에서 뒤집어 본 값
       const d2 = w1 - w2;
       verify[fl.i] = {
         best2: bestLine[0] || null,
@@ -282,14 +361,10 @@ export async function analyzeGame(pgn, opts = {}) {
       chk();
       const i = pick[k];
       const fen = moves[i].before;
-      const whiteToMove = fen.split(' ')[1] === 'w';
       try {
         const res = await engine.analyseMulti(fen, { movetime: deepTime, multipv: 2 });
         if (!res[0] || !res[1]) continue;
-        const s1 = toScore(res[0]), s2 = toScore(res[1]);
-        const w1 = whiteToMove ? wp(s1) : wp(-s1);
-        const w2 = whiteToMove ? wp(s2) : wp(-s2);
-        const gain = Math.round((w1 - w2) * 10) / 10;
+        const gain = Math.round((moverWin(res[0]) - moverWin(res[1])) * 10) / 10;
         const bestSan = uciToSan(fen, res[0].pv, 1)[0];
         if (gain >= 12 && bestSan === sans[i]) {
           gems.push({
@@ -305,14 +380,21 @@ export async function analyzeGame(pgn, opts = {}) {
   }
 
   const avg = (xs) => (xs.length ? Math.round((xs.reduce((a, b) => a + b, 0) / xs.length) * 10) / 10 : null);
-  const acc = { w: avg(accs.w) || 0, b: avg(accs.b) || 0 };
+  const wp0 = Math.round(evals[0].w * 10) / 10;
+  const acc = gameAccuracy([wp0, ...wps]);
+
+  // 시간 (체스닷컴·리체스 PGN 에 %clk 가 있을 때만)
+  const clocks = parseClocks(pgn);
+  const think = clocks.length === n ? thinkTimes(clocks, headers.TimeControl) : null;
 
   const report = {
     opening, book,
     phase: { open_end: openEnd, end_start: endStart },
-    wp: wps, cls, mw,
+    wp: wps, wp0, cls, mw,
     pvs, bests: pvs.map((l) => l[0] || null),
     counts, acc,
+    accv: 3,                       // 정확도 계산 방식 번호 (1=단순평균, 3=단순+변동성가중 반반)
+    wsrc: usedWdl ? 'wdl' : 'cp',  // 승률을 무엇으로 냈는가
     acc_ph: { w: accsPh.w.map(avg), b: accsPh.b.map(avg) },
     cpl: {
       w: cpls.w.length ? Math.round(cpls.w.reduce((a, b) => a + b, 0) / cpls.w.length) : 0,
@@ -322,6 +404,8 @@ export async function analyzeGame(pgn, opts = {}) {
       w: Math.max(400, Math.min(2800, Math.round((acc.w * 25 - 480) / 10) * 10)),
       b: Math.max(400, Math.min(2800, Math.round((acc.b * 25 - 480) / 10) * 10)),
     },
+    clk: clocks.length === n ? clocks : null,
+    think,
     movetime: movetime / 1000,
     engine: engine.id.name || 'Stockfish',
     engine2: null,
@@ -334,6 +418,7 @@ export async function analyzeGame(pgn, opts = {}) {
     welo: headers.WhiteElo || '',
     belo: headers.BlackElo || '',
     date: (headers.Date || headers.UTCDate || '').replace(/\./g, '-'),
+    time: headers.UTCTime || headers.StartTime || '',
     result: headers.Result || '*',
     termination: headers.Termination || '',
     event: headers.Event || '',

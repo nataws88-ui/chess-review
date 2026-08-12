@@ -111,6 +111,51 @@ export function screen(title, opts = {}) {
   return { head, body, root: h('div.screen', head, body) };
 }
 
+/** CSS 변수 읽기 — 캔버스는 CSS를 못 쓰므로 색을 여기서 가져다 칠한다 */
+export function cssVar(name, fallback = '#000') {
+  try {
+    const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    return v || fallback;
+  } catch (e) { return fallback; }
+}
+
+/** 좌우로 미는 동작. 세로로 더 많이 움직였으면 스크롤로 보고 무시한다 */
+export function onSwipe(el, cb) {
+  let x0 = 0, y0 = 0, t0 = 0, on = false;
+  el.addEventListener('touchstart', (e) => {
+    if (e.touches.length !== 1) { on = false; return; }
+    x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; t0 = e.timeStamp; on = true;
+  }, { passive: true });
+  el.addEventListener('touchend', (e) => {
+    if (!on) return;
+    on = false;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - x0, dy = t.clientY - y0;
+    if (e.timeStamp - t0 > 700) return;              // 천천히 끈 건 스와이프가 아니다
+    if (Math.abs(dx) < 40 || Math.abs(dx) < Math.abs(dy) * 1.6) return;
+    cb(dx < 0 ? 1 : -1);                             // 왼쪽으로 밀면 다음 수
+  }, { passive: true });
+}
+
+/* ---------------- 테마 ----------------
+ * 앱 WebView 는 강제 다크모드를 꺼놨으므로(setAlgorithmicDarkeningAllowed(false))
+ * 밝은 테마도 우리가 칠한 색 그대로 나온다. */
+
+export const THEME_BG = { dark: '#0E1116', light: '#F6F7FA' };
+
+export function applyTheme(theme) {
+  const auto = !theme || theme === 'auto';
+  const dark = auto
+    ? !(window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches)
+    : theme !== 'light';
+  const root = document.documentElement;
+  root.setAttribute('data-theme', dark ? 'dark' : 'light');
+  root.style.colorScheme = dark ? 'dark' : 'light';
+  const meta = document.querySelector('meta[name=theme-color]');
+  if (meta) meta.setAttribute('content', dark ? THEME_BG.dark : THEME_BG.light);
+  return dark ? 'dark' : 'light';
+}
+
 /* ---------------- 네이티브 다리 ---------------- */
 
 export const Native = (typeof window !== 'undefined' && window.Native) || null;
@@ -161,18 +206,21 @@ if (typeof window !== 'undefined') {
   };
 }
 
-export function httpGet(url) {
+export function httpGet(url, accept) {
   if (Native && Native.httpGet) {
     const id = 'r' + (++reqSeq);
     return new Promise((resolve, reject) => {
       reqMap.set(id, { resolve, reject });
-      Native.httpGet(url, id);
+      // 리체스는 Accept 헤더로 응답 형식(PGN/ndjson)이 갈린다
+      if (accept && Native.httpGetAs) Native.httpGetAs(url, id, accept);
+      else Native.httpGet(url, id);
       setTimeout(() => {
         if (reqMap.has(id)) { reqMap.delete(id); reject(new Error('요청 시간 초과')); }
       }, 45000);
     });
   }
-  return fetch(url).then((r) => (r.ok ? r.text() : Promise.reject(new Error('HTTP ' + r.status))));
+  return fetch(url, accept ? { headers: { Accept: accept } } : undefined)
+    .then((r) => (r.ok ? r.text() : Promise.reject(new Error('HTTP ' + r.status))));
 }
 
 export function pickFile() {
@@ -261,4 +309,13 @@ export function progressBar() {
 export function fmtDate(d) {
   if (!d) return '';
   return String(d).replace(/-/g, '.').replace(/\.$/, '');
+}
+
+/** 초 → "1분 12초" / "8.4초" */
+export function fmtSec(s) {
+  if (s == null) return '';
+  if (s < 60) return (s < 10 ? Math.round(s * 10) / 10 : Math.round(s)) + '초';
+  const m = Math.floor(s / 60);
+  const r = Math.round(s % 60);
+  return r ? `${m}분 ${r}초` : `${m}분`;
 }

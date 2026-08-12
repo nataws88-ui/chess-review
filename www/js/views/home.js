@@ -52,21 +52,74 @@ export async function view(app) {
     b.appendChild(h('div.empty',
       h('div.big', '♟️'),
       h('p', h('b', '아직 경기가 없습니다')),
-      h('p.sub', '체스닷컴 아이디로 자동으로 가져오거나,'),
+      h('p.sub', '체스닷컴·리체스 아이디로 자동으로 가져오거나,'),
       h('p.sub', 'PGN을 붙여넣어 첫 복기를 시작해 보세요.'),
       h('div.mt', h('button.btn.primary', { onclick: () => nav('/import') }, '경기 가져오기'))));
     return;
   }
 
-  for (const g of games) {
-    const mine = st.myName && [g.meta.white, g.meta.black].some((n) => n.toLowerCase() === st.myName.toLowerCase());
-    const myAcc = !mine ? null
-      : (g.meta.white.toLowerCase() === st.myName.toLowerCase() ? (g.acc || {}).w : (g.acc || {}).b);
-    b.appendChild(h('button.card.tap', { onclick: () => nav('/game/' + encodeURIComponent(g.id)) },
+  const me = (st.myName || '').toLowerCase();
+  const sideOf = (g) => ((g.meta.white || '').toLowerCase() === me ? 'w' : 'b');
+  const inGame = (g) => !!me && [g.meta.white, g.meta.black].some((n) => (n || '').toLowerCase() === me);
+  const myAccOf = (g) => (inGame(g) ? (g.acc || {})[sideOf(g)] : null);
+  const wonBy = (g) => (g.meta.result === '1-0' && sideOf(g) === 'w') || (g.meta.result === '0-1' && sideOf(g) === 'b');
+
+  // 검색 + 거르개 — 판이 쌓이면 목록에서 원하는 판을 못 찾는다
+  const FILTERS = [['all', '전체'], ['w', '⚪ 백'], ['b', '⚫ 흑'], ['win', '승'], ['loss', '패']];
+  let filter = 'all';
+  let query = '';
+  const list = h('div');
+
+  const search = h('input', { type: 'search', placeholder: '상대 이름·오프닝으로 찾기' });
+  search.addEventListener('input', () => { query = search.value.trim().toLowerCase(); paintList(); });
+
+  const chips = h('div.chips.mt');
+  FILTERS.forEach(([k, label]) => {
+    chips.appendChild(h('button.chip' + (k === filter ? '.on' : ''), {
+      onclick: () => {
+        filter = k;
+        Array.from(chips.children).forEach((c, i) => c.classList.toggle('on', FILTERS[i][0] === k));
+        paintList();
+      },
+    }, label));
+  });
+
+  if (games.length >= 5) b.appendChild(h('div.card', search, me ? chips : null));
+  b.appendChild(list);
+  paintList();
+
+  function paintList() {
+    list.innerHTML = '';
+    const shown = games.filter((g) => {
+      if (query) {
+        const hay = `${g.meta.white} ${g.meta.black} ${(g.report && g.report.opening) || ''}`.toLowerCase();
+        if (!hay.includes(query)) return false;
+      }
+      if (filter === 'all' || !me) return true;
+      if (!inGame(g)) return false;
+      if (filter === 'w' || filter === 'b') return sideOf(g) === filter;
+      if (filter === 'win') return wonBy(g);
+      if (filter === 'loss') return !wonBy(g) && g.meta.result !== '1/2-1/2';
+      return true;
+    });
+
+    if (!shown.length) {
+      list.appendChild(h('div.empty', h('p.sub', '조건에 맞는 경기가 없습니다')));
+      return;
+    }
+    if (shown.length !== games.length) {
+      list.appendChild(h('p.dim.mb', `${shown.length}판 표시중`));
+    }
+    for (const g of shown) list.appendChild(gameCard(g));
+  }
+
+  function gameCard(g) {
+    const myAcc = myAccOf(g);
+    return h('button.card.tap', { onclick: () => nav('/game/' + encodeURIComponent(g.id)) },
       h('div.row',
         h('div', { style: 'min-width:0;flex:1' },
           h('div', { style: 'font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap' },
-            h('span', { style: `color:${RESULT_TONE[g.meta.result] || '#fff'}` }, g.meta.white),
+            h('span', { style: `color:${RESULT_TONE[g.meta.result] || 'var(--tx)'}` }, g.meta.white),
             h('span.dim', ' vs '), g.meta.black),
           h('div.sub', `${g.meta.date || ''} · ${resultKo(g.meta.result, g.meta.termination)}`
             + (g.meta.welo ? ` (${g.meta.welo} vs ${g.meta.belo})` : '')),
@@ -79,7 +132,7 @@ export async function view(app) {
         h('span.badge.mistake', `🧩 문제 ${g.nprob || 0}`),
         h('span.badge.info', `${g.nply || 0}수`),
         g.report && g.report.opening ? h('span.dim', { style: 'margin-left:2px' }, g.report.opening) : null),
-    ));
+    );
   }
 }
 

@@ -61,7 +61,7 @@ export function mountQuiz(host, card, opts = {}) {
 
   function draw(marks, live, arrows) {
     renderBoard(boardHost, card.fen, {
-      orient: card.side, marks, theme: st.boardTheme, coords: st.showCoords,
+      orient: card.side, marks, theme: st.boardTheme, shade: st.boardShade, coords: st.showCoords,
       arrows: arrows || null,
       onSquare: live ? onSquare : null,
     });

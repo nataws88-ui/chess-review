@@ -1,12 +1,18 @@
 /* 한 경기 화면 — 🧩 문제 / 🎬 복기 / 📊 리포트 */
 
-import { h, nav, screen, toast, $, clear } from '../ui.js';
+import { h, nav, screen, toast, $, clear, onSwipe, cssVar, fmtSec } from '../ui.js';
 import { renderBoard, addMark, lineArrows } from '../board.js';
 import { settings, store } from '../store.js';
 import { loadBuilt } from '../games.js';
 import { resultKo, qualityPct, QUALITY, QUALITY_ORDER } from '../quizgen.js';
 import { mountQuiz } from './quiz.js';
 import { accColor } from './home.js';
+
+/** 등급 색을 "글자"에 쓸 때 — 밝은 테마에서는 원색이 배경에 묻히므로 테마별 값을 쓴다.
+ *  (동그라미 아이콘의 배경색은 두 테마 모두 원색 그대로가 맞다) */
+export function qColor(k) {
+  return cssVar('--qt-' + k, (QUALITY[k] || {}).c || 'currentColor');
+}
 
 /** 등급 아이콘(색 동그라미) */
 export function qIcon(k, size = 26) {
@@ -64,6 +70,7 @@ export async function view(app, params) {
   }
 
   let reviewStart = 0;
+  let reviewCleanup = null; // 복기 탭을 떠날 때 자동재생 타이머를 끄는 함수
   const qCycle = {};        // 등급별로 몇 번째 수까지 봤는지 (누를 때마다 다음 수)
 
   /** 리포트에서 등급 숫자를 눌렀을 때 — 그 등급의 수로 복기 화면 이동 */
@@ -83,6 +90,7 @@ export async function view(app, params) {
 
   function paint() {
     Array.from(tabs.children).forEach((t, i) => t.classList.toggle('on', TABS[i][0] === cur));
+    if (reviewCleanup) { reviewCleanup(); reviewCleanup = null; }
     clear(pane);
     if (cur === 'quiz') quizTab(pane);
     else if (cur === 'review') { reviewTab(pane, reviewStart); reviewStart = 0; }
@@ -158,26 +166,56 @@ export async function view(app, params) {
   function reviewTab(host, startIdx) {
     let i = startIdx || 0;             // 0 = 시작 국면, 1..n = i번째 수를 둔 뒤
     let showArrows = false;
+    let flipped = false;
+    let timer = null;
 
     const boardHost = h('div.board-wrap');
+    const bar = evalBar();
+    const boardRow = h('div.board-row', st.evalBar ? bar.root : null, boardHost);
     const info = h('div.card', { style: 'margin-top:12px' });
     const listBox = h('div.movelist');
     const graphWrap = h('canvas', { height: 90 });
+
+    const playBtn = h('button.btn.sm', { onclick: () => toggleAuto() }, '▶ 자동');
     const controls = h('div.row', { style: 'gap:6px;margin-top:10px' },
       h('button.btn.sm', { onclick: () => go(0) }, '⏮'),
       h('button.btn.sm', { onclick: () => go(i - 1) }, '◀'),
       h('button.btn.sm', { onclick: () => go(i + 1) }, '▶'),
       h('button.btn.sm', { onclick: () => go(plies.length) }, '⏭'),
+      playBtn,
       h('div.spacer'),
+      h('button.icon-btn', { style: 'font-size:1.15rem', title: '판 뒤집기', onclick: () => { flipped = !flipped; draw(); } }, '⇅'),
       h('button.btn.sm', {
-        onclick: (e) => { showArrows = !showArrows; e.target.classList.toggle('on'); draw(); },
-      }, '🏹 최선 수순'));
+        onclick: (e) => { showArrows = !showArrows; e.currentTarget.classList.toggle('on'); draw(); },
+      }, '🏹 최선'));
 
-    host.appendChild(boardHost);
+    host.appendChild(boardRow);
     host.appendChild(controls);
     host.appendChild(info);
     host.appendChild(h('div.card', h('div.dim.mb', '수 목록 — 눌러서 이동'), listBox));
     host.appendChild(h('div.card', h('div.dim.mb', '평가 그래프'), graphWrap));
+
+    if (st.swipeMove) onSwipe(boardRow, (d) => { stopAuto(); go(i + d); });
+
+    function stopAuto() {
+      if (!timer) return;
+      clearInterval(timer);
+      timer = null;
+      playBtn.textContent = '▶ 자동';
+      playBtn.classList.remove('on');
+    }
+    function toggleAuto() {
+      if (timer) return stopAuto();
+      if (i >= plies.length) i = 0;
+      playBtn.textContent = '⏸ 멈춤';
+      playBtn.classList.add('on');
+      timer = setInterval(() => {
+        if (i >= plies.length) return stopAuto();
+        go(i + 1);
+      }, Math.max(300, st.autoplayMs || 900));
+    }
+    // 탭을 옮기거나 화면을 벗어나면 자동재생을 반드시 끈다
+    reviewCleanup = stopAuto;
 
     function go(n) {
       i = Math.max(0, Math.min(plies.length, n));
@@ -196,9 +234,12 @@ export async function view(app, params) {
       }
       const arrows = showArrows && i < plies.length ? lineArrows(plies[i].bestLine, 'hint') : null;
       renderBoard(boardHost, fen, {
-        orient, marks, theme: st.boardTheme, coords: st.showCoords, arrows,
+        orient: flipped ? (orient === 'w' ? 'b' : 'w') : orient,
+        marks, theme: st.boardTheme, shade: st.boardShade, coords: st.showCoords, arrows,
         anim: st.animate ? anim : null,
       });
+      const wpw = i === 0 ? (report && report.wp0) : (report && report.wp && report.wp[i - 1]);
+      bar.set(wpw == null ? 50 : wpw, flipped ? (orient === 'w' ? 'b' : 'w') : orient);
       paintInfo();
       paintList();
       paintGraph();
@@ -216,11 +257,19 @@ export async function view(app, params) {
       const wpw = (report && report.wp && report.wp[i - 1] != null) ? report.wp[i - 1] : null;
       info.appendChild(h('div.row',
         qIcon(p.cls, 24),
-        h('span', { style: `font-weight:800;color:${q.c};margin-left:8px` },
+        h('span', { style: `font-weight:800;color:${qColor(p.cls)};margin-left:8px` },
           `${p.mn}${p.side === 'w' ? '.' : '...'} ${p.san}${p.glyph}`),
         h('div.spacer'),
         h('span.badge.info', q.ko)));
       if (q.tip) info.appendChild(h('p.dim', { style: 'margin-top:4px' }, q.tip));
+      if (p.think != null) {
+        const prev = plies[i - 3];   // 같은 쪽의 바로 앞 수
+        const slow = prev && prev.think != null && p.think > prev.think * 3 && p.think > 8;
+        const fast = p.think <= 1.5;
+        info.appendChild(h('p.dim', { style: 'margin-top:3px' },
+          `⏱ ${fmtSec(p.think)} 씀` + (p.clk != null ? ` · 남은 시간 ${fmtSec(p.clk)}` : '')
+          + (slow ? ' · 오래 고민한 수' : fast ? ' · 즉답' : '')));
+      }
       if (wpw != null) {
         info.appendChild(h('div.wpbar.mt',
           h('div.w', { style: `width:${wpw}%` }, wpw >= 18 ? `백 ${Math.round(wpw)}%` : ''),
@@ -228,6 +277,25 @@ export async function view(app, params) {
       }
       if (p.hint && p.hint !== p.san) {
         info.appendChild(h('p.sub.mt', '💡 여기서는 ', h('b', p.hint), ' 이(가) 최선이었습니다'));
+      }
+      // 후보수 — 깊게 다시 본 국면에만 있다
+      if (p.alts && p.alts.length) {
+        const box = h('div.mt');
+        box.appendChild(h('div.dim.mb', '이 국면의 후보수 (엔진 순위)'));
+        p.alts.forEach((a, k) => {
+          const mine = a.san === p.san;
+          box.appendChild(h('div.lrow', { style: 'padding:6px 0' },
+            h('span.badge' + (k === 0 ? '.good' : ''), { style: 'min-width:26px;text-align:center' }, String(k + 1)),
+            h('span.nm', a.san, mine ? h('span.dim', '  ← 실제로 둔 수') : null),
+            h('span.val', { style: `color:${accColor(a.w)}` }, Math.round(a.w) + '%')));
+          if (a.line && a.line.length > 1) {
+            box.appendChild(h('div.dim', { style: 'margin:-4px 0 2px 34px' }, a.line.join(' ')));
+          }
+        });
+        info.appendChild(box);
+      }
+      if (p.punish && p.punish.length) {
+        info.appendChild(h('p.sub.mt', '⚔️ 상대의 응징 수순: ', h('b', p.punish.join(' '))));
       }
       const prob = problems.find((x) => x.ply === i);
       if (prob) {
@@ -301,7 +369,7 @@ export async function view(app, params) {
       if (!a && !c) continue;
       const q = QUALITY[k];
       table.appendChild(h('div.qrow',
-        h('span.qlabel', { style: `color:${q.c}` }, q.ko),
+        h('span.qlabel', { style: `color:${qColor(k)}` }, q.ko),
         qCell(me, k, a),
         qIcon(k),
         qCell(opp, k, c)));
@@ -313,7 +381,7 @@ export async function view(app, params) {
 
     function qCell(side, k, n) {
       if (!n) return h('span.qn.zero', '0');
-      return h('button.qn.tapn', { style: `color:${QUALITY[k].c}`, onclick: () => jumpQ(side, k) }, String(n));
+      return h('button.qn.tapn', { style: `color:${qColor(k)}`, onclick: () => jumpQ(side, k) }, String(n));
     }
 
     // 구간별 정확도
@@ -334,6 +402,37 @@ export async function view(app, params) {
         h('div', { style: `width:${pct.y}%;background:#d8b44a;color:#2a2103` }, pct.y >= 14 ? `부정확 ${pct.y}%` : ''),
         h('div', { style: `width:${pct.r}%;background:#d05656;color:#2a0606` }, pct.r >= 14 ? `실수 ${pct.r}%` : '')),
       h('p.dim.mt', `총 ${Object.values(cnt[me]).reduce((a, x) => a + x, 0)}수 · 평균 손실 ${report.cpl[me]}cp`)));
+
+    // 이 판의 시간 씀씀이 (시계가 기록된 PGN 일 때만)
+    if (report.think) {
+      const rows = [];
+      for (const sd of [me, opp]) {
+        const ts = [];
+        report.think.forEach((t, k) => {
+          if (t == null) return;
+          if ((k % 2 === 0 ? 'w' : 'b') === sd) ts.push(t);
+        });
+        if (!ts.length) continue;
+        const sum = ts.reduce((a, x) => a + x, 0);
+        const longest = Math.max(...ts);
+        rows.push(h('div.lrow',
+          h('div', { style: 'flex:1;min-width:0' },
+            h('div.nm', `${tagOf(sd)} · ${nameOf(sd)}`),
+            h('div.dim', `가장 오래 고민한 수 ${fmtSec(longest)}`)),
+          h('span.val', `${fmtSec(sum / ts.length)} / 수`)));
+      }
+      if (rows.length) {
+        host.appendChild(h('div.card', h('h3', '⏱ 시간 씀씀이'),
+          h('p.dim.mb', '한 수에 평균 얼마나 썼는지'), ...rows));
+      }
+    }
+
+    // 이 분석이 어떤 조건에서 나왔는지 — 숫자를 믿을 근거
+    host.appendChild(h('div.card',
+      h('h3', '분석 정보'),
+      h('p.dim', `${report.engine || 'Stockfish'} · 수당 ${report.movetime || '?'}초`
+        + (report.wsrc === 'wdl' ? ' · 승률은 엔진의 WDL 실측' : ' · 승률은 점수 환산')
+        + (report.accv >= 2 ? ' · 정확도는 변동성 가중' : ''))));
   }
 
   function accCard(name, acc, est, cpl) {
@@ -342,9 +441,38 @@ export async function view(app, params) {
       h('div.v', { style: `color:${accColor(acc)}` }, acc + '%'),
       h('div.dim', `추정 ${est} · 평균손실 ${cpl}cp`));
   }
+
+  // 화면을 떠날 때(라우터가 부른다) 자동재생 타이머를 끈다
+  return () => { if (reviewCleanup) reviewCleanup(); };
 }
 
 const START = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+
+/** 판 옆 세로 승률 막대 (위=흑, 아래=백 — 판 방향에 맞춰 뒤집는다) */
+export function evalBar() {
+  const fill = h('div.fill');
+  const hi = h('div.num.hi', '');
+  const lo = h('div.num.lo', '');
+  const root = h('div.evalbar', fill, h('div.mid'), hi, lo);
+  return {
+    root,
+    /** @param wpWhite 백 관점 승률% @param orient 판이 보는 방향(아래쪽 색) */
+    set(wpWhite, orient) {
+      const v = Math.max(0, Math.min(100, wpWhite));
+      const bottomIsWhite = orient !== 'b';
+      const bottom = bottomIsWhite ? v : 100 - v;   // 아래쪽 색이 가진 몫
+      // column-reverse 라서 fill 은 아래에서 자란다. 색은 판 방향에 맞춰 바꾼다
+      fill.style.height = bottom + '%';
+      fill.style.background = bottomIsWhite ? '#e8e6df' : '#3a4150';
+      root.style.background = bottomIsWhite ? '#3a4150' : '#e8e6df';
+      hi.style.color = bottomIsWhite ? '#20242c' : '#dfe4ec';
+      lo.style.color = bottomIsWhite ? '#dfe4ec' : '#20242c';
+      hi.textContent = bottom >= 50 ? Math.round(bottom) : '';
+      lo.textContent = bottom < 50 ? Math.round(100 - bottom) : '';
+      root.title = `백 ${Math.round(v)}% · 흑 ${Math.round(100 - v)}%`;
+    },
+  };
+}
 
 /** 승률 곡선 캔버스 (강제 다크모드 영향을 받지 않는 캔버스로 그린다) */
 export function drawEvalGraph(canvas, report, curPly, onJump, bigMarkers) {
@@ -366,9 +494,9 @@ export function drawEvalGraph(canvas, report, curPly, onJump, bigMarkers) {
   const Y = (v) => hgt - (v / 100) * hgt;
 
   // 배경
-  c.fillStyle = '#12161d';
+  c.fillStyle = cssVar('--graph-bg', '#12161d');
   c.fillRect(0, 0, w, hgt);
-  c.fillStyle = '#1b212b';
+  c.fillStyle = cssVar('--graph-top', '#1b212b');
   c.fillRect(0, 0, w, Y(50));
 
   // 곡선 + 채움
@@ -378,20 +506,20 @@ export function drawEvalGraph(canvas, report, curPly, onJump, bigMarkers) {
   c.lineTo(X(n - 1), Y(50));
   c.lineTo(X(0), Y(50));
   c.closePath();
-  c.fillStyle = 'rgba(232,236,243,.16)';
+  c.fillStyle = cssVar('--graph-fill', 'rgba(232,236,243,.16)');
   c.fill();
 
   c.beginPath();
   c.moveTo(X(0), Y(wp[0]));
   for (let i = 1; i < n; i++) c.lineTo(X(i), Y(wp[i]));
-  c.strokeStyle = '#e8ecf3';
+  c.strokeStyle = cssVar('--graph-line', '#e8ecf3');
   c.lineWidth = 1.6;
   c.stroke();
 
   // 50% 기준선
   c.beginPath();
   c.moveTo(0, Y(50)); c.lineTo(w, Y(50));
-  c.strokeStyle = 'rgba(255,255,255,.22)';
+  c.strokeStyle = cssVar('--graph-grid', 'rgba(255,255,255,.22)');
   c.lineWidth = 1;
   c.setLineDash([3, 3]);
   c.stroke();
@@ -409,7 +537,7 @@ export function drawEvalGraph(canvas, report, curPly, onJump, bigMarkers) {
     c.arc(x, y, bigMarkers ? 5 : 3.5, 0, Math.PI * 2);
     c.fillStyle = k === 'blunder' ? '#f05555' : '#f0a030';
     c.fill();
-    c.strokeStyle = '#0e1116';
+    c.strokeStyle = cssVar('--graph-edge', '#0e1116');
     c.lineWidth = 1.4;
     c.stroke();
   }
@@ -419,7 +547,7 @@ export function drawEvalGraph(canvas, report, curPly, onJump, bigMarkers) {
     const x = X(curPly - 1);
     c.beginPath();
     c.moveTo(x, 0); c.lineTo(x, hgt);
-    c.strokeStyle = '#4ADE80';
+    c.strokeStyle = cssVar('--accent', '#4ADE80');
     c.lineWidth = 1.4;
     c.stroke();
   }
