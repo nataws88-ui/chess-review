@@ -3,7 +3,7 @@
  * Chessis 의 Analysis Board + Board Editor + Key Elements + Threats + 엔진 라인을
  * 한 화면에 모았다. 엔진 없이도 국면 읽기·위협은 그대로 뜬다(판만 보고 내는 값이라). */
 
-import { h, nav, screen, toast, clear, impact, moveKind, isApp, copyText, readClipboard, fullscreen, isFullscreen, fitBoard } from '../ui.js';
+import { h, nav, screen, toast, clear, impact, moveKind, isApp, copyText, readClipboard, fullscreen, isFullscreen, fitBoard, holdRepeat } from '../ui.js';
 import { renderBoard, addMark, boardOpts } from '../board.js';
 import { settings, setSetting, store } from '../store.js';
 import { Chess } from '../lib/chess.js';
@@ -71,18 +71,22 @@ export async function view(app, params) {
     }, label);
   }
 
-  const navRow = h('div.row', { style: 'gap:6px;margin-top:8px' },
-    h('button.btn.sm', { onclick: () => go(0) }, '⏮'),
-    h('button.btn.sm', { onclick: () => go(ply - 1) }, '◀'),
-    h('button.btn.sm', { onclick: () => go(ply + 1) }, '▶'),
-    h('button.btn.sm', { onclick: () => go(sans.length) }, '⏭'),
-    h('div.spacer'),
-    h('button.btn.sm', { onclick: () => { orient = orient === 'w' ? 'b' : 'w'; draw(); } }, '🔄 뒤집기'),
-    h('button.btn.sm', {
+  const prevBtn = h('button.btn.step', { 'aria-label': '이전 수', onclick: () => go(ply - 1) }, '◀');
+  const nextBtn = h('button.btn.step', { 'aria-label': '다음 수', onclick: () => go(ply + 1) }, '▶');
+  holdRepeat(prevBtn, () => go(ply - 1));
+  holdRepeat(nextBtn, () => go(ply + 1));
+  const navRow = h('div.movebar',
+    h('button.btn', { 'aria-label': '처음으로', onclick: () => go(0) }, '⏮'),
+    prevBtn, nextBtn,
+    h('button.btn', { 'aria-label': '끝으로', onclick: () => go(sans.length) }, '⏭'),
+    h('button.btn', { 'aria-label': '판 뒤집기', onclick: () => { orient = orient === 'w' ? 'b' : 'w'; draw(); } }, '⇅'),
+    h('button.btn.auto', {
       onclick: (e) => {
         const on = !isFullscreen();
         fullscreen(on);
-        e.currentTarget.textContent = on ? '⛶ 원래대로' : '⛶ 크게';
+        e.currentTarget.textContent = on ? '✕ 작게' : '⛶ 크게';
+        e.currentTarget.classList.toggle('on', on);
+        window.dispatchEvent(new Event('resize'));
       },
     }, '⛶ 크게'));
 

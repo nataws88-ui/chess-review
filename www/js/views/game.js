@@ -1,6 +1,6 @@
 /* 한 경기 화면 — 🧩 문제 / 🎬 복기 / 📊 리포트 */
 
-import { h, nav, screen, toast, clear, onSwipe, cssVar, fmtSec, copyText, impact, fitBoard } from '../ui.js';
+import { h, nav, screen, toast, clear, onSwipe, onTapSide, holdRepeat, cssVar, fmtSec, copyText, impact, fitBoard } from '../ui.js';
 import { renderBoard, addMark, lineArrows, boardOpts } from '../board.js';
 import { settings, setSetting, store } from '../store.js';
 import { loadBuilt, invalidate } from '../games.js';
@@ -249,29 +249,32 @@ export async function view(app, params) {
     const listBox = h('div.movelist');
     const graphWrap = h('canvas', { height: 90 });
 
-    const playBtn = h('button.btn.sm', { onclick: () => toggleAuto() }, '▶ 자동');
-    const controls = h('div.row', { style: 'gap:6px;margin-top:10px' },
-      h('button.btn.sm', { onclick: () => go(0) }, '⏮'),
-      h('button.btn.sm', { onclick: () => go(i - 1) }, '◀'),
-      h('button.btn.sm', { onclick: () => go(i + 1) }, '▶'),
-      h('button.btn.sm', { onclick: () => go(plies.length) }, '⏭'),
-      playBtn,
-      h('div.spacer'),
-      h('button.icon-btn', { style: 'font-size:1.15rem', title: '판 뒤집기', onclick: () => { flipped = !flipped; draw(); } }, '⇅'),
-      h('button.btn.sm', {
-        onclick: (e) => { showArrows = !showArrows; e.currentTarget.classList.toggle('on'); draw(); },
-      }, '🏹 최선'));
+    // ── 이동 바 — 제일 자주 누르는 자리라 크게, 화면 너비를 나눠 갖는다
+    const playBtn = h('button.btn.auto', { onclick: () => toggleAuto() }, '▶ 자동');
+    const prevBtn = h('button.btn.step', { 'aria-label': '이전 수', onclick: () => step(-1) }, '◀');
+    const nextBtn = h('button.btn.step', { 'aria-label': '다음 수', onclick: () => step(1) }, '▶');
+    holdRepeat(prevBtn, () => step(-1));       // 꾹 누르면 주르륵 되감긴다
+    holdRepeat(nextBtn, () => step(1));
+    const controls = h('div.movebar',
+      h('button.btn', { 'aria-label': '처음으로', onclick: () => { stopAuto(); go(0); } }, '⏮'),
+      prevBtn, nextBtn,
+      h('button.btn', { 'aria-label': '끝으로', onclick: () => { stopAuto(); go(plies.length); } }, '⏭'),
+      playBtn);
 
-    const insightRow = h('div.row', { style: 'gap:6px;margin-top:6px;flex-wrap:wrap' },
-      h('button.btn.sm' + (showElems ? '.on' : ''), {
+    const insightRow = h('div.toolrow',
+      h('button.btn', { 'aria-label': '판 뒤집기', onclick: () => { flipped = !flipped; draw(); } }, '⇅'),
+      h('button.btn', {
+        onclick: (e) => { showArrows = !showArrows; e.currentTarget.classList.toggle('on'); draw(); },
+      }, '🏹 최선'),
+      h('button.btn' + (showElems ? '.on' : ''), {
         onclick: async (e) => {
           showElems = !showElems;
           e.currentTarget.classList.toggle('on', showElems);
           await setSetting('showElems', showElems);
           draw();
         },
-      }, '🔍 국면 읽기'),
-      h('button.btn.sm' + (showThreats ? '.on' : ''), {
+      }, '🔍 국면'),
+      h('button.btn' + (showThreats ? '.on' : ''), {
         onclick: async (e) => {
           showThreats = !showThreats;
           e.currentTarget.classList.toggle('on', showThreats);
@@ -279,7 +282,7 @@ export async function view(app, params) {
           draw();
         },
       }, '⚠️ 위협'),
-      h('button.btn.sm', {
+      h('button.btn', {
         onclick: async () => {
           const fen = i === 0 ? (built.startFen || START) : plies[i - 1].fen;
           await store.set('boardFen', fen);
@@ -288,18 +291,27 @@ export async function view(app, params) {
       }, '🔬 분석판'));
     const keNotes = h('div.ke-notes');
 
+    // 넓은 화면(펼친 폰)에서는 두 줄이 한 줄로 붙어 판이 그만큼 커진다
+    const ctrlWrap = h('div.ctrlwrap', controls, insightRow);
     host.appendChild(boardRow);
-    host.appendChild(controls);
-    host.appendChild(insightRow);
+    host.appendChild(ctrlWrap);
     host.appendChild(keNotes);
     host.appendChild(info);
     host.appendChild(h('div.card', h('div.dim.mb', '수 목록 — 눌러서 이동'), listBox));
     host.appendChild(h('div.card', h('div.dim.mb', '평가 그래프'), graphWrap));
 
     // 판·수 이동 단추가 한 화면에 들어오게 (폰을 접었다 펴면 다시 잰다)
-    fitBoard(boardHost, [controls, insightRow]);
+    fitBoard(boardHost, [ctrlWrap]);
 
-    if (st.swipeMove) onSwipe(boardRow, (d) => { stopAuto(); go(i + d); });
+    if (st.swipeMove) onSwipe(boardRow, (d) => step(d));
+    // 복기 판은 수를 두는 곳이 아니다 — 판 자체를 제일 큰 앞뒤 단추로 쓴다
+    onTapSide(boardHost, (d) => step(d));
+
+    /** 자동재생 중이면 먼저 멈추고 한 수 — 단추·판탭·스와이프가 다 같은 길을 탄다 */
+    function step(d) {
+      stopAuto();
+      go(i + d);
+    }
 
     function stopAuto() {
       if (!timer) return;
@@ -386,7 +398,7 @@ export async function view(app, params) {
       clear(info);
       if (i === 0) {
         info.appendChild(h('b', '시작 국면'));
-        info.appendChild(h('p.sub', '▶ 를 눌러 한 수씩 따라가 보세요.'));
+        info.appendChild(h('p.sub', '▶ 를 누르거나 판의 오른쪽을 톡 쳐서 한 수씩 따라가 보세요. 꾹 누르면 주르륵 넘어갑니다.'));
         return;
       }
       const p = plies[i - 1];

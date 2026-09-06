@@ -465,3 +465,31 @@ body.fullscreen #app{padding-left:0}
   .boardgrid>.sidepanel .btn-row{flex-direction:column}
   .boardgrid>.sidepanel .puz-status{margin:0 0 4px;font-size:14px;text-align:left}
 }
+
+/* ---------- 수 이동 바 (1.4.4) ----------
+ * 복기·분석판에서 제일 많이 누르는 자리다. 엄지 한 마디(54px)를 밑돌지 않게 잡고,
+ * 화면 너비를 균등하게 나눠 가져 손이 어디로 가야 할지 헷갈리지 않게 한다. */
+.movebar{display:flex;gap:6px;margin-top:10px}
+.movebar>.btn{flex:1 1 0;min-width:0;min-height:54px;padding:0 4px;
+  font-size:1.5rem;line-height:1;border-radius:14px;
+  -webkit-tap-highlight-color:transparent;touch-action:manipulation}
+.movebar>.btn.step{flex:1.5 1 0;font-size:1.75rem}   /* 한 수씩 — 제일 크게 */
+.movebar>.btn.auto{flex:1.7 1 0;font-size:1rem}
+.movebar>.btn:active{background:var(--accent);border-color:var(--accent);
+  color:var(--on-accent);transform:scale(.94)}
+.movebar>.btn.hold{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+
+/* 보조 단추 줄 — 이동 바보다는 작게, 그래도 44px 은 넘긴다 */
+.toolrow{display:flex;flex-wrap:nowrap;gap:6px;margin-top:6px;
+  overflow-x:auto;scrollbar-width:none}
+.toolrow::-webkit-scrollbar{display:none}
+.toolrow>.btn{flex:1 1 auto;min-height:44px;font-size:.86rem;
+  padding:0 9px;border-radius:12px;white-space:nowrap;
+  -webkit-tap-highlight-color:transparent;touch-action:manipulation}
+
+/* 두 줄을 한 덩어리로 — 자리가 넉넉하면(펼친 폰) 저절로 한 줄로 붙어 판이 커지고,
+ * 좁으면(접은 폰) 알아서 두 줄이 된다. 화면 너비를 따로 재지 않는다. */
+.ctrlwrap{display:flex;flex-wrap:wrap;gap:6px 8px;margin-top:10px}
+.ctrlwrap>.movebar{flex:1 1 300px;margin-top:0}
+.ctrlwrap>.toolrow{flex:1 1 320px;margin-top:0}
+.ctrlwrap>.toolrow>.btn{padding:0 6px}

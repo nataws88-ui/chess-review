@@ -140,6 +140,50 @@ export function onSwipe(el, cb) {
   }, { passive: true });
 }
 
+/* 꾹 누르고 있으면 계속 넘어간다 — 끝까지 보려고 스무 번 누르지 않아도 된다.
+ * 손을 떼면 click 이 한 번 더 오므로 반복은 0.45초 뒤부터 센다. */
+export function holdRepeat(btn, fn) {
+  let wait = null, rep = null;
+  const stop = () => {
+    if (wait) clearTimeout(wait);
+    if (rep) clearInterval(rep);
+    wait = rep = null;
+    btn.classList.remove('hold');
+  };
+  btn.addEventListener('pointerdown', (e) => {
+    if (e.button != null && e.button !== 0) return;
+    stop();
+    wait = setTimeout(() => {
+      btn.classList.add('hold');
+      rep = setInterval(fn, 130);
+    }, 450);
+  });
+  for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) {
+    btn.addEventListener(ev, stop);
+  }
+  window.addEventListener('blur', stop);
+  return stop;
+}
+
+/* 판의 왼쪽·오른쪽을 톡 치면 한 수 뒤로·앞으로.
+ * 미는 것보다 빠르고, 판 자체가 제일 큰 단추가 된다(수를 두지 않는 화면에서만 쓴다). */
+export function onTapSide(el, cb) {
+  let x0 = 0, y0 = 0, t0 = 0, on = false;
+  el.addEventListener('pointerdown', (e) => {
+    if (e.button != null && e.button !== 0) { on = false; return; }
+    on = true; x0 = e.clientX; y0 = e.clientY; t0 = Date.now();
+  });
+  el.addEventListener('pointerup', (e) => {
+    if (!on) return;
+    on = false;
+    if (Date.now() - t0 > 500) return;                       // 오래 누른 건 탭이 아니다
+    if (Math.abs(e.clientX - x0) > 12 || Math.abs(e.clientY - y0) > 12) return;
+    const r = el.getBoundingClientRect();
+    if (!r.width) return;
+    cb(e.clientX - r.left < r.width / 2 ? -1 : 1);
+  });
+}
+
 /* ---------------- 테마 ----------------
  * 앱 WebView 는 강제 다크모드를 꺼놨으므로(setAlgorithmicDarkeningAllowed(false))
  * 밝은 테마도 우리가 칠한 색 그대로 나온다. */
