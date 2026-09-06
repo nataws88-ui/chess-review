@@ -38,6 +38,7 @@ global.requestAnimationFrame = () => {};
 global.window = { devicePixelRatio: 1 };
 
 const { renderBoard, addMark } = await import('../www/js/board.js');
+const { readPosition, readThreats } = await import('../www/js/insight.js');
 
 const SPRITE = readFileSync(join(ROOT, 'www/assets/pieces.svg'), 'utf8')
   .replace(/^<svg[^>]*>/, '').replace(/<\/svg>$/, '');
@@ -96,4 +97,56 @@ render('04-check-black', 'rnbqkbnr/pppp1ppp/8/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR b K
 render('05-ocean', 'r2q1rk1/pp2ppbp/2np1np1/2p5/4P3/2NP1N1P/PPP1BPP1/R1BQ1RK1 w - - 0 9',
   { orient: 'w', theme: 'ocean', coords: false });
 
-console.log('\n판 렌더러 미리보기 5장 생성: test/preview/');
+/* 6) 국면 읽기 — 핀·지켜지지 않는 기물·통과 폰·체크 가능 칸을 한 번에 */
+{
+  const fen = 'rnbqkb1r/pppp1ppp/5n2/4p1B1/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1';
+  const r = readPosition(fen, { pin: true, undef: true, king: true, passed: true }, 'b');
+  render('06-key-elements', fen, {
+    orient: 'w', theme: 'green', marks: r.marks, arrows: r.arrows, coords: true,
+  });
+}
+
+/* 7) 기물 활동성 — 칸마다 갈 수 있는 칸 수 */
+{
+  const fen = 'r2q1rk1/pp2ppbp/2np1np1/2p5/4P3/2NP1N1P/PPP1BPP1/R1BQ1RK1 w - - 0 9';
+  const r = readPosition(fen, { mobility: true }, 'w');
+  render('07-mobility', fen, { orient: 'w', theme: 'wood', numbers: r.numbers, coords: false });
+}
+
+/* 8) 위협 — 상대가 지금 두면 무엇이 오는가 */
+{
+  const fen = '4k3/8/8/7b/8/5N2/8/4K3 w - - 0 1';
+  const r = readThreats(fen, 'b', { material: true, mate: true, undef: true });
+  render('08-threats', fen, { orient: 'w', theme: 'ocean', marks: r.marks, arrows: r.arrows, coords: true });
+}
+
+/* 9) 사용자 지정 판 색 + 마지막 수 테두리 표시 */
+{
+  const m = {};
+  addMark(m, 'e2', 'lm-frame'); addMark(m, 'e4', 'lm-frame');
+  render('09-custom-color', 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1',
+    { orient: 'w', theme: { l: '#F2E8DC', d: '#8A6BA8' }, marks: m, coords: true });
+}
+
+/* 10~12) 화살표 굵기 세 단계 — 고르는 값이 실제로 얼마나 달라지는지 눈으로 */
+{
+  const fen = 'r1bqk2r/pppp1ppp/2n2n2/2b1p3/2B1P3/2N2N2/PPPP1PPP/R1BQK2R w KQkq - 6 5';
+  const arrows = [
+    { f: 'f3', t: 'g5', kind: 'best' },
+    { f: 'c4', t: 'f7', kind: 'punish' },
+  ];
+  for (const size of ['normal', 'big', 'huge']) {
+    render(`1${['normal', 'big', 'huge'].indexOf(size)}-arrow-${size}`, fen,
+      { orient: 'w', theme: 'green', arrows, arrowSize: size, coords: true });
+  }
+}
+
+/* 13) 타격감 — 잡는 수가 놓인 칸의 파장 */
+{
+  const m = {};
+  addMark(m, 'f3', 'hl'); addMark(m, 'e5', 'hl');
+  render('13-impact', 'rnbqkbnr/pppp1ppp/8/4N3/8/8/PPPP1PPP/RNBQKB1R b KQkq - 0 3',
+    { orient: 'w', theme: 'wood', marks: m, anim: { from: 'f3', to: 'e5', kind: 'capture' }, coords: true });
+}
+
+console.log('\n판 렌더러 미리보기 13장 생성: test/preview/');

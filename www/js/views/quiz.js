@@ -1,9 +1,10 @@
 /* 문제 풀이 컴포넌트 — 판에서 직접 기물을 움직여 답한다.
  * 게임별 퀴즈와 훈련(SRS) 양쪽에서 같은 것을 쓴다. */
 
-import { h, toast, play, haptic } from '../ui.js';
-import { renderBoard, addMark, lineArrows } from '../board.js';
-import { settings } from '../store.js';
+import { h, toast, clear, impact } from '../ui.js';
+import { renderBoard, addMark, lineArrows, boardOpts } from '../board.js';
+import { settingsNow } from '../store.js';
+import { readPosition, readThreats, DEFAULT_ELEMS } from '../insight.js';
 import engine, { toScore } from '../engine.js';
 import { wp as winPct } from '../analyze.js';
 
@@ -19,10 +20,13 @@ const KIND_LABEL = {
  * @param opts  {header, onDone(ok), nextLabel, onNext, showGame}
  */
 export function mountQuiz(host, card, opts = {}) {
-  let st = { boardTheme: 'green', sound: true, haptic: true, animate: true, showCoords: true };
-  settings().then((s) => { st = s; });
+  // 설정은 앱이 뜰 때 이미 읽어 뒀다. 기다렸다 다시 그리면 판 색이 한 번 깜빡인다.
+  const st = settingsNow();
 
   let answered = false, sel = null, gaveUp = false;
+  // 막힐 때 켜는 도움 — 판이 무엇을 말하고 있는지 겹쳐 보여 준다 (정답은 안 알려 준다)
+  let helpOn = false;
+  let lastDraw = { marks: null, live: true, arrows: null };
   let mode = 'best';
   let myLine = null, myWp = null, myMove = null;
 
@@ -34,6 +38,15 @@ export function mountQuiz(host, card, opts = {}) {
   const fb = h('div.hidden');
   const chips = h('div.chips.hidden', { style: 'margin-top:10px;justify-content:center' });
   const lineInfo = h('p.dim', { style: 'text-align:center;margin-top:6px;min-height:18px' });
+  const keNotes = h('div.ke-notes');
+  const helpBtn = h('button.btn.sm.wide.mt', {
+    onclick: () => {
+      helpOn = !helpOn;
+      helpBtn.classList.toggle('on', helpOn);
+      helpBtn.textContent = helpOn ? '🔍 도움 끄기' : '🔍 막혔어요 — 국면 읽기';
+      redraw();
+    },
+  }, '🔍 막혔어요 — 국면 읽기');
 
   const root = h('div',
     opts.header || null,
@@ -45,7 +58,7 @@ export function mountQuiz(host, card, opts = {}) {
         card.gemGain ? h('span.dim', `다른 수였다면 -${Math.round(card.gemGain)}%p`) : null),
       h('h3', card.question || `${card.moveLabel} — 최선의 수는?`),
       card.ctx ? h('p.dim', { style: 'overflow-x:auto;white-space:nowrap;margin-bottom:10px' }, '직전 수순: ' + card.ctx) : null,
-      boardHost, promo, hint, chips, lineInfo, giveUp, fb),
+      boardHost, keNotes, promo, hint, chips, lineInfo, helpBtn, giveUp, fb),
   );
   host.appendChild(root);
 
@@ -59,10 +72,36 @@ export function mountQuiz(host, card, opts = {}) {
     return m;
   }
 
+  function redraw() { draw(lastDraw.marks || baseMarks(), lastDraw.live, lastDraw.arrows); }
+
   function draw(marks, live, arrows) {
+    lastDraw = { marks, live, arrows };
+    const m = { ...(marks || {}) };
+    let ar = arrows ? [...arrows] : [];
+    let numbers = {};
+    const notes = [];
+    if (helpOn) {
+      // 어떤 요소를 볼지는 설정을 따르되, 아무것도 안 켜져 있으면 기본값으로 보여 준다
+      const on = (st.keyElems && Object.values(st.keyElems).some(Boolean)) ? st.keyElems : DEFAULT_ELEMS;
+      const r = readPosition(card.fen, on, card.side);
+      for (const [sq, v] of Object.entries(r.marks)) (m[sq] = m[sq] || []).push(...v);
+      ar = ar.concat(r.arrows);
+      numbers = r.numbers;
+      notes.push(...r.notes);
+      const t = readThreats(card.fen, card.side === 'w' ? 'b' : 'w',
+        { material: true, mate: true, undef: false });
+      for (const [sq, v] of Object.entries(t.marks)) (m[sq] = m[sq] || []).push(...v);
+      ar = ar.concat(t.arrows);
+      notes.push(...t.notes);
+    }
+    if (keNotes) {
+      clear(keNotes);
+      for (const n of notes) keNotes.appendChild(h('span.ke-note', n));
+    }
     renderBoard(boardHost, card.fen, {
-      orient: card.side, marks, theme: st.boardTheme, shade: st.boardShade, coords: st.showCoords,
-      arrows: arrows || null,
+      orient: card.side, marks: m, numbers,
+      ...boardOpts(st),
+      arrows: ar.length ? ar : null,
       onSquare: live ? onSquare : null,
     });
   }
@@ -105,8 +144,7 @@ export function mountQuiz(host, card, opts = {}) {
     myMove = move;
     giveUp.classList.add('hidden');
     hint.classList.add('hidden');
-    haptic(st.haptic);
-    play(ok ? 'ok' : 'bad', st.sound);
+    impact(ok ? 'ok' : 'bad', st);
 
     // 판 표시: 정답 칸 초록, 내가 둔 틀린 칸 빨강
     const marks = baseMarks();

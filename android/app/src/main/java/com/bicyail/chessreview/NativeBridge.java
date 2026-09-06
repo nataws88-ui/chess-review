@@ -115,6 +115,10 @@ public class NativeBridge {
     @JavascriptInterface
     public void saveFile(String name, String content) { a.runOnUiThread(() -> a.saveFile(name, content)); }
 
+    /** 기물 세트 ZIP·판 배경 그림 — 내용을 base64 로 돌려준다 */
+    @JavascriptInterface
+    public void pickBinary(String reqId, String mime) { a.runOnUiThread(() -> a.pickBinary(reqId, mime)); }
+
     @JavascriptInterface
     public String takePendingShare() {
         String s = a.pendingShare;
@@ -164,12 +168,23 @@ public class NativeBridge {
     @JavascriptInterface
     public void keepAwake(boolean on) { a.keepAwake(on); }
 
+    /** 진동 — navigator.vibrate 가 막혀 있을 때 쓰는 길 */
+    @JavascriptInterface
+    public void vibrate(int ms) { a.vibrate(ms); }
+
     @JavascriptInterface
     public void haptic() {
         a.runOnUiThread(() -> {
             if (a.web != null) a.web.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
         });
     }
+
+    /** 분석이 오래 걸릴 때 — 끝나면 알림으로 알려 준다 */
+    @JavascriptInterface
+    public void notify(String title, String text) { a.runOnUiThread(() -> a.notify(title, text)); }
+
+    @JavascriptInterface
+    public void askNotify() { a.runOnUiThread(a::askNotify); }
 
     @JavascriptInterface
     public String appVersion() { return BuildConfig.VERSION_NAME; }

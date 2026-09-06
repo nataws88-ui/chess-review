@@ -6,6 +6,8 @@ import android.graphics.Color;
 import android.graphics.Insets;
 import android.net.Uri;
 import android.os.Build;
+import android.os.VibrationEffect;
+import android.os.Vibrator;
 import android.os.Bundle;
 import android.view.View;
 import android.view.WindowInsets;
@@ -24,6 +26,8 @@ import androidx.webkit.WebViewFeature;
 import org.json.JSONObject;
 
 import java.io.BufferedReader;
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
@@ -39,6 +43,8 @@ public class MainActivity extends Activity {
     static final String ORIGIN = "https://appassets.androidplatform.net";
     private static final int REQ_OPEN = 1001;
     private static final int REQ_SAVE = 1002;
+    /** 기물 세트 ZIP·판 배경 그림처럼 글자가 아닌 파일 */
+    private static final int REQ_OPEN_BIN = 1003;
 
     WebView web;
     Engine engine;
@@ -53,6 +59,7 @@ public class MainActivity extends Activity {
     String pendingShare = null;
     private String pendingSaveContent = null;
     private String openReqId = null;
+    private String binReqId = null;
     private boolean pageReady = false;
 
     @Override
@@ -283,6 +290,19 @@ public class MainActivity extends Activity {
         }
     }
 
+    /** 이진 파일 고르기 — 내용을 base64 로 넘긴다 (기물 ZIP, 판 배경 그림) */
+    void pickBinary(String reqId, String mime) {
+        binReqId = reqId;
+        Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        i.addCategory(Intent.CATEGORY_OPENABLE);
+        i.setType(mime == null || mime.isEmpty() ? "*/*" : mime);
+        try {
+            startActivityForResult(i, REQ_OPEN_BIN);
+        } catch (Exception e) {
+            js("window.__binPicked && window.__binPicked(" + q(reqId) + ",null,null)");
+        }
+    }
+
     void saveFile(String name, String content) {
         pendingSaveContent = content;
         Intent i = new Intent(Intent.ACTION_CREATE_DOCUMENT);
@@ -310,6 +330,17 @@ public class MainActivity extends Activity {
             String name = uri.getLastPathSegment();
             String body = readUri(uri);
             js("window.__filePicked && window.__filePicked(" + q(id) + "," + q(name) + "," + q(body) + ")");
+        } else if (req == REQ_OPEN_BIN) {
+            String id = binReqId;
+            binReqId = null;
+            if (res != RESULT_OK || data == null || data.getData() == null) {
+                js("window.__binPicked && window.__binPicked(" + q(id) + ",null,null)");
+                return;
+            }
+            Uri uri = data.getData();
+            String name = uri.getLastPathSegment();
+            String b64 = readUriBase64(uri);
+            js("window.__binPicked && window.__binPicked(" + q(id) + "," + q(name) + "," + q(b64) + ")");
         } else if (req == REQ_SAVE) {
             String content = pendingSaveContent;
             pendingSaveContent = null;
@@ -321,6 +352,64 @@ public class MainActivity extends Activity {
                 toast("저장 실패: " + e.getMessage());
             }
         }
+    }
+
+    /** 파일을 통째로 읽어 base64 로. 8MB 를 넘으면 거절한다(웹뷰로 넘기다 죽는다) */
+    String readUriBase64(Uri uri) {
+        try (InputStream in = getContentResolver().openInputStream(uri)) {
+            if (in == null) return null;
+            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+            byte[] buf = new byte[16384];
+            int n, total = 0;
+            while ((n = in.read(buf)) > 0) {
+                total += n;
+                if (total > 8 * 1024 * 1024) return null;
+                bos.write(buf, 0, n);
+            }
+            return android.util.Base64.encodeToString(bos.toByteArray(), android.util.Base64.NO_WRAP);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /** 분석이 끝났는데 사용자가 다른 앱을 보고 있을 때 알려 준다 */
+    void notify(String title, String text) {
+        try {
+            android.app.NotificationManager nm =
+                    (android.app.NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+            if (nm == null) return;
+            String ch = "analysis";
+            if (Build.VERSION.SDK_INT >= 26) {
+                android.app.NotificationChannel c = new android.app.NotificationChannel(
+                        ch, "분석 알림", android.app.NotificationManager.IMPORTANCE_DEFAULT);
+                c.setShowBadge(false);
+                nm.createNotificationChannel(c);
+            }
+            Intent open = new Intent(this, MainActivity.class);
+            open.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+            int flags = android.app.PendingIntent.FLAG_UPDATE_CURRENT
+                    | (Build.VERSION.SDK_INT >= 23 ? android.app.PendingIntent.FLAG_IMMUTABLE : 0);
+            android.app.PendingIntent pi = android.app.PendingIntent.getActivity(this, 0, open, flags);
+            androidx.core.app.NotificationCompat.Builder b =
+                    new androidx.core.app.NotificationCompat.Builder(this, ch)
+                            .setSmallIcon(R.mipmap.ic_launcher)
+                            .setContentTitle(title)
+                            .setContentText(text)
+                            .setAutoCancel(true)
+                            .setContentIntent(pi);
+            androidx.core.app.NotificationManagerCompat.from(this).notify(7301, b.build());
+        } catch (Throwable ignored) {}
+    }
+
+    /** 안드로이드 13+ 는 알림도 권한이 필요하다. 처음 쓸 때 한 번만 물어본다 */
+    void askNotify() {
+        if (Build.VERSION.SDK_INT < 33) return;
+        try {
+            if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
+                    != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(new String[]{android.Manifest.permission.POST_NOTIFICATIONS}, 1010);
+            }
+        } catch (Throwable ignored) {}
     }
 
     // ---------------- 도우미 ----------------
@@ -346,6 +435,21 @@ public class MainActivity extends Activity {
             if (on) getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
             else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         });
+    }
+
+    /** 타격감 — 수를 놓을 때 짧게 울린다. 길이는 웹에서 정한다(수 종류마다 다르다). */
+    void vibrate(final int ms) {
+        if (ms <= 0) return;
+        try {
+            Vibrator v = (Vibrator) getSystemService(VIBRATOR_SERVICE);
+            if (v == null || !v.hasVibrator()) return;
+            int d = Math.min(ms, 120);          // 아무리 길어도 0.12초 — 손목이 아프면 안 쓴다
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                v.vibrate(VibrationEffect.createOneShot(d, VibrationEffect.DEFAULT_AMPLITUDE));
+            } else {
+                v.vibrate(d);
+            }
+        } catch (Exception ignored) {}
     }
 
     void shareText(String text) {

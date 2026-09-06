@@ -109,6 +109,7 @@ global.document = {
 };
 global.window = {
   addEventListener: () => {},
+  removeEventListener: () => {},
   devicePixelRatio: 1,
   scrollTo: () => {},
   location: { hash: '#/' },
@@ -234,8 +235,18 @@ if (firstId) {
   await renderView('경기 — 복기', '../www/js/views/game.js', 'view', { id: firstId, tab: 'review' }, ['복기', '수 목록']);
   await renderView('경기 — 리포트', '../www/js/views/game.js', 'view', { id: firstId, tab: 'report' }, ['정확도', '수 품질']);
 }
-await renderView('훈련', '../www/js/views/train.js', 'view', {}, seeded ? ['카드'] : ['문제']);
+await renderView('훈련 입구', '../www/js/views/train.js', 'hub', {}, ['퍼즐', '연습 코스', '내 실수 복습']);
+await renderView('내 실수 복습', '../www/js/views/train.js', 'view', {}, seeded ? ['카드'] : ['문제']);
+await renderView('퍼즐', '../www/js/views/puzzle.js', 'view', {}, []);
+await renderView('퍼즐 성적', '../www/js/views/puzzle.js', 'view', { mode: 'stats' }, ['퍼즐 점수', '주제별 성적']);
+await renderView('연속 도전', '../www/js/views/puzzle.js', 'view', { mode: 'rush' }, ['남은 목숨', '최고 기록']);
+await renderView('연습 코스', '../www/js/views/practice.js', 'view', {}, ['기본 메이트', '양걸이']);
+await renderView('연습 — 코스 하나', '../www/js/views/practice.js', 'view', { cid: 'mate-basic' }, ['퀸으로 몰기']);
+await renderView('연습 — 과제', '../www/js/views/practice.js', 'view', { cid: 'mate-basic', idx: '0' }, ['메이트로 끝내기']);
 await renderView('대국', '../www/js/views/spar.js', 'view', {}, ['앱에서만']);
+await renderView('분석판', '../www/js/views/board.js', 'view', {}, ['국면 읽기', '엔진 라인', '위협']);
+await renderView('오프닝', '../www/js/views/openings.js', 'view', {}, []);
+await renderView('국면 읽기 배우기', '../www/js/views/learn.js', 'view', {}, ['핀 걸린 기물']);
 await renderView('통계', '../www/js/views/stats.js', 'view', {}, seeded ? ['전적', '실수 원인'] : []);
 await renderView('설정', '../www/js/views/settings.js', 'view', {}, ['내 아이디', '데이터']);
 await renderView('앱 정보', '../www/js/views/settings.js', 'about', {}, ['라이선스', 'Stockfish']);
@@ -272,11 +283,16 @@ if (firstId) {
     if (b.problems.length) { built = b; break; }
   }
 
+  // 판은 이제 pointerdown 으로 고르고(끌어서 옮기기 때문), 옛 click 도 남아 있다
   const clickSquare = (sq, orient) => {
-    const entry = [...listeners].reverse().find(([el, t]) => t === 'click' && el.tagName === 'SVG');
-    if (!entry) throw new Error('판에 클릭 처리기가 없습니다');
+    const entry = [...listeners].reverse()
+      .find(([el, t]) => (t === 'pointerdown' || t === 'click') && el.tagName === 'SVG');
+    if (!entry) throw new Error('판에 누르기 처리기가 없습니다');
     const [x, y] = sqXY(sq, orient);
-    entry[2]({ clientX: (x + 50) / 800 * 360, clientY: (y + 50) / 800 * 360 });
+    entry[2]({
+      clientX: (x + 50) / 800 * 360, clientY: (y + 50) / 800 * 360,
+      button: 0, preventDefault() {},
+    });
   };
 
   const solve = async (problem, from, to) => {
@@ -374,6 +390,116 @@ if (firstId) {
     fail++;
     console.log(`  ❌ 수 품질 표 — ${e.message}\n     ${(e.stack || '').split('\n')[1] || ''}`);
   }
+}
+
+
+/* ---------------- 퍼즐·연습 동작 ---------------- */
+
+console.log('\n퍼즐 (내 경기에서 캔 문제)');
+{
+  const { minePuzzles, runner, applyResult, emptyState, pickPuzzle, THEME_KO } =
+    await import('../www/js/puzzles.js');
+  let mined = [];
+  for (const rec of mem.games.values()) mined = mined.concat(minePuzzles(rec));
+  ok(mined.length > 0, `내 경기에서 퍼즐 ${mined.length}개를 캤다`);
+
+  let played = 0, bad = 0;
+  for (const p of mined) {
+    const r = runner(p);
+    r.opponent();                       // 상대의 실수를 놓는다
+    let good = true;
+    while (!r.done) {
+      const res = r.try(r.expect);
+      if (!res.ok) { good = false; break; }
+      if (!r.done) r.opponent();
+    }
+    played++;
+    if (!good) bad++;
+  }
+  ok(bad === 0, `정답 수순으로 끝까지 풀린다 (${played}개 중 실패 ${bad}개)`);
+
+  if (mined.length) {
+    const r2 = runner(mined[0]);
+    r2.opponent();
+    const wrong = r2.chess.moves({ verbose: true }).find((m) => m.lan !== r2.expect);
+    if (wrong) {
+      const res = r2.try(wrong.lan);
+      ok(!res.ok || res.alt, '엉뚱한 수는 오답으로 잡힌다');
+      ok(r2.solutionSans().length > 0, '정답 수순을 SAN 으로 보여 준다');
+    }
+    const st0 = emptyState();
+    const up = applyResult(st0, mined[0], true);
+    const down = applyResult(st0, mined[0], false);
+    ok(up.state.rating > st0.rating, `맞히면 점수가 오른다 (${st0.rating}→${up.state.rating})`);
+    ok(down.state.rating < st0.rating, `틀리면 점수가 내린다 (${st0.rating}→${down.state.rating})`);
+    ok(up.state.streak === 1 && down.state.streak === 0, '연속 정답이 맞게 센다');
+    ok(!!pickPuzzle(mined, st0, {}), '다음 문제를 골라 준다');
+    const themed = pickPuzzle(mined, st0, { theme: 'pin' });
+    ok(!themed || themed.themes.includes('pin'), '주제로 거르면 그 주제만 나온다');
+    ok(Object.keys(THEME_KO).length > 10, '주제 한글 이름이 갖춰져 있다');
+  }
+}
+
+console.log('\n기본 퍼즐 꾸러미');
+{
+  const { PACK_PUZZLES } = await import('../www/js/puzzledata.js');
+  const { runner } = await import('../www/js/puzzles.js');
+  let bad = 0, mateBad = 0, mates = 0;
+  for (const p of PACK_PUZZLES) {
+    const r = runner(p);
+    r.opponent();
+    let good = true;
+    while (!r.done) {
+      const res = r.try(r.expect);
+      if (!res.ok) { good = false; break; }
+      if (!r.done) r.opponent();
+    }
+    if (!good) bad++;
+    if (p.themes.includes('mate')) {
+      mates++;
+      if (!r.chess.isCheckmate()) mateBad++;   // 메이트라고 딱지 붙인 건 실제로 메이트여야 한다
+    }
+  }
+  ok(PACK_PUZZLES.length > 50, `기본 퍼즐 ${PACK_PUZZLES.length}개`);
+  ok(bad === 0, `전부 정답 수순으로 풀린다 (실패 ${bad}개)`);
+  ok(mateBad === 0, `메이트 딱지가 붙은 ${mates}개는 실제로 메이트로 끝난다`);
+}
+
+console.log('\n퍼즐 화면 동작');
+{
+  const app2 = new El('div');
+  app2.id = 'app';
+  doc.children = [app2];
+  const pv = await import('../www/js/views/puzzle.js');
+  await pv.view(app2, {});
+  // 상대의 실수 수가 자동으로 놓일 때까지 기다린다
+  for (let i = 0; i < 40; i++) await new Promise((r) => setTimeout(r, 30));
+  const txt = app2.textContent;
+  ok(/차례/.test(txt), '상대가 실수를 두고 내 차례가 된다');
+  const handler = [...listeners].reverse().find(([el, t]) => t === 'pointerdown' && el.tagName === 'SVG');
+  ok(!!handler, '판에서 기물을 고를 수 있다 (누르기·끌기 처리기)');
+  ok(/난이도/.test(txt), '난이도를 보여 준다');
+}
+
+console.log('\n연습 코스 (국면 검증)');
+{
+  const { CHAPTERS, chapterSize } = await import('../www/js/practicedata.js');
+  const { Chess } = await import('../www/js/lib/chess.js');
+  let lessons = 0, illegal = [];
+  for (const ch of CHAPTERS) {
+    if (ch.kind !== 'lesson') continue;
+    for (const it of ch.items) {
+      lessons++;
+      try {
+        const c = new Chess(it.fen);
+        if (c.isGameOver()) illegal.push(`${it.id}(이미 끝난 국면)`);
+        if (!c.moves().length) illegal.push(`${it.id}(둘 수가 없음)`);
+      } catch (e) { illegal.push(`${it.id}(${e.message})`); }
+    }
+  }
+  ok(illegal.length === 0, `연습 국면 ${lessons}개 전부 합법`, illegal.join(', '));
+  ok(CHAPTERS.every((c) => chapterSize(c) > 0), '모든 코스에 과제가 있다');
+  ok(CHAPTERS.every((c) => c.kind !== 'theme' || c.theme), '주제 코스에는 주제가 붙어 있다');
 }
 
 console.log(`\n${'='.repeat(46)}\n화면 테스트: ${pass}개 통과, ${fail}개 실패`);

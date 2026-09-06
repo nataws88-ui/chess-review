@@ -301,7 +301,7 @@ function render(b, mine, cards, srs, st, me) {
       ...tough.map((c) => h('button.card.tap', { style: 'margin:8px 0 0', onclick: () => nav('/game/' + encodeURIComponent(c.gameId) + '/quiz') },
         h('div.row', h('b', { style: 'flex:1' }, `${c.moveLabel} — ${c.best}`), h('span.badge.mistake', `${srs[c.id].lap}회 틀림`)),
         h('div.dim', `${c.d} · ${c.g}`))),
-      h('button.btn.wide.mt', { onclick: () => nav('/train') }, '지금 훈련하기')));
+      h('button.btn.wide.mt', { onclick: () => nav('/train/srs') }, '지금 훈련하기')));
   }
 }
 

@@ -1,16 +1,68 @@
-/* 🎯 훈련 — 모든 경기의 실수를 모아 안키식 간격 반복으로 복습 */
+/* 🎯 훈련 — 갈래가 넷이다.
+ *   1) 내 실수 복습(SRS)  — 내 경기에서 나온 실수를 안키식 간격 반복으로
+ *   2) 퍼즐               — 리체스 training 방식, 레이팅이 붙는다
+ *   3) 연습 코스          — 리체스 practice 방식, 한 가지씩 배우고 두어 본다
+ *   4) 배우기             — 국면 읽는 법 아홉 가지
+ * 이 파일은 그 입구(hub)와 1번을 담는다. */
 
 import { h, nav, screen, toast, clear, play, adBreak } from '../ui.js';
 import { settings, setSetting, getSrs, setSrs, schedule, today, store } from '../store.js';
 import { allCards } from '../games.js';
 import { legalMovesData } from '../quizgen.js';
 import { mountQuiz } from './quiz.js';
+import { allPuzzles, getState as puzState } from '../puzzles.js';
+import { CHAPTERS, chapterSize } from '../practicedata.js';
 
 const SESS = 'trainSession';
 
+/* ---------------- 입구 ---------------- */
+
+export async function hub(app) {
+  const s = screen('🎯 훈련', { back: false });
+  app.appendChild(s.root);
+  const b = s.body;
+
+  const [cards, srs, pz, ps, done] = await Promise.all([
+    allCards(), getSrs(), allPuzzles(), puzState(), store.get('practiceDone', null),
+  ]);
+  const day = today();
+  const due = cards.filter((c) => srs[c.id] && srs[c.id].due <= day).length;
+  const fresh = cards.filter((c) => !srs[c.id]).length;
+  const pdone = Object.keys(done || {}).length;
+  const ptotal = CHAPTERS.reduce((a, c) => a + (c.kind === 'lesson' ? chapterSize(c) : 1), 0);
+
+  const tile = (path, ic, title, sub, badge, cls) =>
+    h('button.card.row.tap' + (cls || ''), { onclick: () => nav(path) },
+      h('div.ic-big', ic),
+      h('div', { style: 'flex:1;min-width:0;text-align:left' }, h('b', title), h('p.sub', sub)),
+      badge ? h('span.badge.info', badge) : null);
+
+  b.appendChild(tile('/train/srs', '🔁', '내 실수 복습',
+    cards.length ? '내 경기에서 나온 실수를 간격 반복으로' : '경기를 분석하면 문제가 쌓입니다',
+    cards.length ? `오늘 ${due + Math.min(fresh, 10)}장` : null));
+  b.appendChild(tile('/puzzle', '🧩', '퍼즐',
+    '상대의 실수를 응징하는 수 찾기 — 맞힐수록 어려워집니다',
+    `${ps.rating}점`));
+  b.appendChild(tile('/puzzle/rush', '🔥', '연속 도전',
+    '목숨 3개. 틀리기 전까지 몇 개나 맞힐 수 있나',
+    `최고 ${(ps.rush && ps.rush.best) || 0}`));
+  b.appendChild(tile('/practice', '🎓', '연습 코스',
+    '기본 메이트·엔딩·전술을 하나씩 배우고 두어 봅니다',
+    `${pdone}/${ptotal}`));
+  b.appendChild(tile('/learn', '📖', '국면 읽는 법',
+    '핀·양걸이·통과한 폰… 판이 무엇을 말하는지 아홉 가지'));
+
+  b.appendChild(h('div.grid3.mt',
+    h('div.stat', h('div.k', '가진 퍼즐'), h('div.v', String(pz.length))),
+    h('div.stat', h('div.k', '복습 카드'), h('div.v', String(cards.length))),
+    h('div.stat', h('div.k', '연속 정답'), h('div.v', String(ps.streak || 0)))));
+}
+
+/* ---------------- 내 실수 복습 ---------------- */
+
 export async function view(app) {
   const st = await settings();
-  const s = screen('🎯 오늘의 훈련', { back: false });
+  const s = screen('🔁 내 실수 복습');
   app.appendChild(s.root);
   const b = s.body;
 

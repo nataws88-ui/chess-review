@@ -178,11 +178,12 @@ class Engine {
    * 후보수 여러 개를 한 번에 (💎 명수 판정용).
    * @returns [{cp, mate, pv}] — multipv 순서, cp는 '둘 차례 쪽' 관점
    */
-  analyseMulti(fen, { movetime = 1000, multipv = 2 } = {}) {
+  analyseMulti(fen, { movetime = 1000, depth = null, multipv = 2 } = {}) {
     return this._serial(async () => {
       if (!this.started) await this.start();
       const best = new Map();     // multipv 번호 → {depth, line}
-      const collector = this._collect((l) => l.startsWith('bestmove'), movetime * 6 + 8000);
+      const budget = depth ? 90000 : movetime * 6 + 8000;
+      const collector = this._collect((l) => l.startsWith('bestmove'), budget);
       const listener = {
         onLine: (line) => {
           if (!line.startsWith('info ') || !line.includes(' pv ') || !line.includes(' score ')) return;
@@ -199,7 +200,8 @@ class Engine {
         this._fullStrength();
         this.send('setoption name MultiPV value ' + multipv);
         this.send('position fen ' + fen);
-        this.send('go movetime ' + Math.round(movetime));
+        if (depth) this.send('go depth ' + depth);
+        else this.send('go movetime ' + Math.round(movetime));
         await collector;
       } finally {
         const i = this.lines.indexOf(listener);

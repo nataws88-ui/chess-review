@@ -57,7 +57,7 @@ global.self = global.window;
 
 const { analyzeGame, wp, classify, findOpening, uciToSan,
   gameAccuracy, parseClocks, parseTimeControl, thinkTimes } = await import('../www/js/analyze.js');
-const { wdlPct } = await import('../www/js/engine.js');
+const { wdlPct, toScore } = await import('../www/js/engine.js');
 const { buildGame, moveFacts, hangingAfter, resultKo, qualityPct } = await import('../www/js/quizgen.js');
 const { splitPgn, peek, fingerprint, gameId } = await import('../www/js/games.js').catch(() => ({}));
 const engine = (await import('../www/js/engine.js')).default;
@@ -296,6 +296,31 @@ if (MIG) {
   ok(keys.every((k) => k.startsWith(sample.id + '#')), `SRS 키 규칙 일치 (예: ${keys[0] || '카드없음'})`);
   const srsN = Object.keys(data.srs || {}).length;
   console.log(`     훈련 진도: ${srsN ? srsN + '장 포함됨' : '아직 없음 (앱이전.html 에서 보내면 합쳐짐)'}`);
+}
+
+/* ---------- 9) 연습 코스 국면을 엔진으로 확인 ----------
+ * 「메이트로 끝내기」라고 써 놓은 자리가 실제로 메이트가 있는 자리인지,
+ * 「비기기」라고 한 자리가 정말 비기는 자리인지 매번 확인한다.
+ * (처음 후보를 잡을 때 이 검사로 네 개가 틀린 게 드러났다 — 사람 눈으로는 못 잡는다) */
+console.log('\n9) 연습 코스 국면 (엔진 확인)');
+{
+  const { CHAPTERS } = await import('../www/js/practicedata.js');
+  for (const ch of CHAPTERS) {
+    if (ch.kind !== 'lesson') continue;
+    for (const it of ch.items) {
+      const r = await engine.analyse(it.fen, { depth: 18 });
+      // cp 로 재면 안 된다 — 스톡피시 18 의 cp 는 정규화돼 있어 다 이긴 자리도 +2.8 이다.
+      // 승/무/패 확률(WDL)이 진실을 말한다.
+      const [w, d, l] = r.wdl || [null, null, null];
+      const mate = r.mate != null && r.mate > 0;
+      const what = mate ? `메이트 ${r.mate}수`
+        : (w == null ? `cp ${toScore(r)}` : `승${(w / 10).toFixed(0)}% 무${(d / 10).toFixed(0)}% 패${(l / 10).toFixed(0)}%`);
+      let good;
+      if (it.goal === 'draw') good = !mate && d >= 700;
+      else good = mate || (w != null && w >= 950);
+      ok(good, `${ch.name} · ${it.title} — ${it.goal} (${what})`);
+    }
+  }
 }
 
 engine.quit();

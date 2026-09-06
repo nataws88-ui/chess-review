@@ -70,7 +70,9 @@ export function nav(path, replace = false) {
 }
 
 export async function dispatch() {
-  const path = (location.hash || '#/').slice(1) || '/';
+  // 주소 뒤의 ?query 는 경로에서 떼어 낸다 (#/game/x/review?ply=12 처럼 쓴다)
+  const raw = (location.hash || '#/').slice(1) || '/';
+  const path = raw.split('?')[0] || '/';
   const app = $('app');
   adBanner(path);
   for (const r of routes) {
@@ -79,6 +81,7 @@ export async function dispatch() {
     const params = {};
     r.keys.forEach((k, i) => { params[k] = decodeURIComponent(m[i + 1]); });
     if (currentCleanup) { try { currentCleanup(); } catch (e) {} currentCleanup = null; }
+    fullscreen(false);
     clear(app);
     app.scrollTop = 0;
     window.scrollTo(0, 0);
@@ -156,14 +159,40 @@ export function applyTheme(theme) {
   return dark ? 'dark' : 'light';
 }
 
+/* ---------------- 전체 화면 ----------------
+ * 판을 크게 보고 싶을 때 위 제목줄과 아래 메뉴를 감춘다 (Chessis 의 Full Screen).
+ * 화면을 옮기면 자동으로 풀린다 — 갇히지 않게. */
+
+export function fullscreen(on) {
+  try {
+    document.body.classList.toggle('fullscreen', !!on);
+  } catch (e) {}
+  return !!on;
+}
+
+export function isFullscreen() {
+  try { return document.body.classList.contains('fullscreen'); } catch (e) { return false; }
+}
+
 /* ---------------- 네이티브 다리 ---------------- */
 
 export const Native = (typeof window !== 'undefined' && window.Native) || null;
 export const isApp = !!Native;
 
-export function haptic(on = true) {
+/**
+ * 진동. 종류마다 길이·박자가 다르다(VIBE 표는 아래 소리 부분에 있다).
+ * navigator.vibrate 는 박자를 줄 수 있어 먼저 쓰고, 막혀 있으면 네이티브로 내려간다.
+ */
+export function haptic(on = true, kind = 'ok') {
   if (!on) return;
-  try { Native && Native.haptic(); } catch (e) {}
+  const pat = VIBE[kind] == null ? VIBE.ok : VIBE[kind];
+  try {
+    if (typeof navigator !== 'undefined' && navigator.vibrate && navigator.vibrate(pat)) return;
+  } catch (e) {}
+  try {
+    if (Native && Native.vibrate) { Native.vibrate(Array.isArray(pat) ? pat[1] || 15 : pat); return; }
+    if (Native) Native.haptic();
+  } catch (e) {}
 }
 
 export function keepAwake(on) {
@@ -175,7 +204,7 @@ export function keepAwake(on) {
  * 전면광고는 "분석 완료"처럼 사용자가 이미 손을 멈춘 순간에만 부르고,
  * 실제로 띄울지(간격·준비 여부)는 네이티브가 판단한다. */
 
-const BOARD_ROUTES = [/^\/game\//, /^\/train/, /^\/spar/];
+const BOARD_ROUTES = [/^\/game\//, /^\/train/, /^\/spar/, /^\/board/, /^\/puzzle/, /^\/practice/, /^\/learn/];
 
 export function adBanner(path) {
   const show = !BOARD_ROUTES.some((rx) => rx.test(path));
@@ -247,6 +276,93 @@ export function pickFile() {
   });
 }
 
+/* 이진 파일 고르기 — 기물 세트 ZIP·판 배경 그림.
+ * 네이티브는 base64 로 넘겨 준다(웹뷰 다리는 글자만 오간다). */
+const binMap = new Map();
+if (typeof window !== 'undefined') {
+  window.__binPicked = (id, name, b64) => {
+    const w = binMap.get(id);
+    if (!w) return;
+    binMap.delete(id);
+    if (!b64) return w.reject(new Error('취소'));
+    try {
+      const bin = atob(b64);
+      const u8 = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+      w.resolve({ name, buffer: u8.buffer, dataUrl: null });
+    } catch (e) { w.reject(new Error('파일을 읽지 못했습니다')); }
+  };
+}
+
+/**
+ * @param {string} mime  'application/zip' · 'image/*'
+ * @returns {Promise<{name, buffer:ArrayBuffer}>}
+ */
+export function pickBinary(mime = '*/*') {
+  if (Native && Native.pickBinary) {
+    const id = 'b' + (++reqSeq);
+    return new Promise((resolve, reject) => {
+      binMap.set(id, { resolve, reject });
+      Native.pickBinary(id, mime);
+    });
+  }
+  return new Promise((resolve, reject) => {
+    const inp = h('input', { type: 'file', accept: mime, style: 'display:none' });
+    inp.addEventListener('change', () => {
+      const f = inp.files && inp.files[0];
+      if (!f) { inp.remove(); return reject(new Error('취소')); }
+      const r = new FileReader();
+      r.onload = () => { inp.remove(); resolve({ name: f.name, buffer: r.result }); };
+      r.onerror = () => { inp.remove(); reject(new Error('읽기 실패')); };
+      r.readAsArrayBuffer(f);
+    });
+    document.body.appendChild(inp);
+    inp.click();
+  });
+}
+
+/** 오래 걸린 일이 끝났을 때 — 사용자가 다른 앱을 보고 있으면 알림으로 알린다 */
+export function notify(title, text) {
+  if (typeof document !== 'undefined' && document.visibilityState === 'visible') return false;
+  if (Native && Native.notify) { Native.notify(title, text); return true; }
+  return false;
+}
+
+export function askNotify() {
+  if (Native && Native.askNotify) Native.askNotify();
+}
+
+/** 글자 복사 — 클립보드가 막힌 웹뷰에서는 임시 입력칸으로 되돌아간다 */
+export function copyText(txt, msg = '복사했습니다') {
+  const done = () => toast(msg);
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(txt).then(done, () => fallback());
+      return;
+    }
+  } catch (e) {}
+  fallback();
+  function fallback() {
+    try {
+      const ta = h('textarea', { style: 'position:fixed;opacity:0;left:-999px' });
+      ta.value = txt;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      ta.remove();
+      done();
+    } catch (e) { toast('복사하지 못했습니다'); }
+  }
+}
+
+/** 붙여넣기 — 클립보드 읽기가 막혀 있으면 null */
+export async function readClipboard() {
+  try {
+    if (navigator.clipboard && navigator.clipboard.readText) return await navigator.clipboard.readText();
+  } catch (e) {}
+  return null;
+}
+
 export function saveFile(name, content) {
   if (Native && Native.saveFile) { Native.saveFile(name, content); return true; }
   const a = h('a', { href: URL.createObjectURL(new Blob([content], { type: 'application/json' })), download: name });
@@ -254,7 +370,10 @@ export function saveFile(name, content) {
   return true;
 }
 
-/* ---------------- 소리 (파일 없이 합성) ---------------- */
+/* ---------------- 소리 (파일 없이 합성) ----------------
+ * 음원 파일을 넣지 않고 그때그때 만든다. 앱 용량이 늘지 않고 지연도 없다.
+ * 「타격감」은 소리 하나로 나지 않는다 — 짧은 잡음(나무 부딪는 소리)에
+ * 낮은 사인파(울림)를 겹쳐야 판에 놓이는 느낌이 난다. */
 
 let actx = null;
 function ctx() {
@@ -266,29 +385,132 @@ function ctx() {
   return actx;
 }
 
-const TONES = {
-  move: [[330, 0.05, 'triangle'], [440, 0.05, 'triangle']],
-  capture: [[220, 0.07, 'square'], [160, 0.08, 'square']],
-  ok: [[660, 0.08, 'sine'], [880, 0.12, 'sine']],
-  bad: [[220, 0.14, 'sawtooth'], [160, 0.16, 'sawtooth']],
-  win: [[523, 0.09, 'sine'], [659, 0.09, 'sine'], [784, 0.18, 'sine']],
+let noiseBuf = null;
+function noiseBuffer(c) {
+  if (!noiseBuf) {
+    const n = Math.floor(c.sampleRate * 0.4);
+    noiseBuf = c.createBuffer(1, n, c.sampleRate);
+    const d = noiseBuf.getChannelData(0);
+    for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+  }
+  return noiseBuf;
+}
+
+/** 잡음 한 번 — 나무·돌이 부딪는 소리의 뼈대 */
+function knock(c, t, { freq = 1200, q = 1.2, dur = 0.06, gain = 0.35 }) {
+  const src = c.createBufferSource();
+  src.buffer = noiseBuffer(c);
+  const bp = c.createBiquadFilter();
+  bp.type = 'bandpass'; bp.frequency.value = freq; bp.Q.value = q;
+  const g = c.createGain();
+  g.gain.setValueAtTime(gain, t);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  src.connect(bp); bp.connect(g); g.connect(c.destination);
+  src.start(t); src.stop(t + dur + 0.02);
+}
+
+/** 사인/사각파 한 음 — slide 를 주면 그 주파수까지 미끄러진다 */
+function tone(c, t, { freq, dur = 0.08, type = 'sine', gain = 0.16, slide = null }) {
+  const o = c.createOscillator(), g = c.createGain();
+  o.type = type; o.frequency.setValueAtTime(freq, t);
+  if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(20, slide), t + dur);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(gain, t + 0.008);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g); g.connect(c.destination);
+  o.start(t); o.stop(t + dur + 0.02);
+}
+
+const SOUNDS = {
+  // 판에 톡 — 짧고 마른 소리 + 아주 낮은 울림
+  move: (c, t) => {
+    knock(c, t, { freq: 1500, q: 1.1, dur: 0.045, gain: 0.32 });
+    tone(c, t, { freq: 190, dur: 0.07, type: 'sine', gain: 0.2, slide: 120 });
+  },
+  // 잡는 수는 한 번 더 무겁게 — 퍽
+  capture: (c, t) => {
+    knock(c, t, { freq: 620, q: 0.7, dur: 0.13, gain: 0.55 });
+    knock(c, t + 0.02, { freq: 2200, q: 1.6, dur: 0.05, gain: 0.22 });
+    tone(c, t, { freq: 110, dur: 0.16, type: 'sawtooth', gain: 0.26, slide: 55 });
+  },
+  // 체크는 귀에 걸리게 두 번
+  check: (c, t) => {
+    tone(c, t, { freq: 980, dur: 0.06, type: 'square', gain: 0.13 });
+    tone(c, t + 0.075, { freq: 1320, dur: 0.09, type: 'square', gain: 0.13 });
+  },
+  castle: (c, t) => {
+    knock(c, t, { freq: 1300, q: 1.1, dur: 0.05, gain: 0.3 });
+    knock(c, t + 0.085, { freq: 1000, q: 1.1, dur: 0.06, gain: 0.34 });
+    tone(c, t + 0.085, { freq: 170, dur: 0.08, type: 'sine', gain: 0.18 });
+  },
+  promote: (c, t) => {
+    [523, 659, 784, 1047].forEach((f, i) =>
+      tone(c, t + i * 0.06, { freq: f, dur: 0.12, type: 'triangle', gain: 0.14 }));
+  },
+  ok: (c, t) => {
+    tone(c, t, { freq: 660, dur: 0.08, type: 'sine', gain: 0.15 });
+    tone(c, t + 0.06, { freq: 990, dur: 0.13, type: 'sine', gain: 0.15 });
+  },
+  bad: (c, t) => {
+    tone(c, t, { freq: 220, dur: 0.14, type: 'sawtooth', gain: 0.14, slide: 150 });
+    tone(c, t + 0.1, { freq: 150, dur: 0.18, type: 'sawtooth', gain: 0.13, slide: 90 });
+  },
+  win: (c, t) => {
+    [523, 659, 784, 1047].forEach((f, i) =>
+      tone(c, t + i * 0.075, { freq: f, dur: i === 3 ? 0.26 : 0.1, type: 'sine', gain: 0.16 }));
+  },
+  lose: (c, t) => {
+    [523, 440, 349, 262].forEach((f, i) =>
+      tone(c, t + i * 0.085, { freq: f, dur: i === 3 ? 0.3 : 0.11, type: 'triangle', gain: 0.15 }));
+  },
+  click: (c, t) => knock(c, t, { freq: 2400, q: 2, dur: 0.025, gain: 0.18 }),
+  tick: (c, t) => knock(c, t, { freq: 3200, q: 3, dur: 0.018, gain: 0.12 }),
 };
 
 export function play(name, enabled = true) {
   if (!enabled) return;
   const c = ctx();
   if (!c) return;
-  let t = c.currentTime;
-  for (const [freq, dur, type] of TONES[name] || TONES.move) {
-    const o = c.createOscillator(), g = c.createGain();
-    o.type = type; o.frequency.value = freq;
-    g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(0.15, t + 0.01);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    o.connect(g); g.connect(c.destination);
-    o.start(t); o.stop(t + dur + 0.02);
-    t += dur * 0.75;
-  }
+  try { (SOUNDS[name] || SOUNDS.move)(c, c.currentTime + 0.001); } catch (e) {}
+}
+
+/* ---------------- 진동 세기 ----------------
+ * 소리와 진동이 같이 나야 「쳤다」는 느낌이 난다. 종류마다 길이를 다르게 준다. */
+
+const VIBE = {
+  move: 14,
+  capture: [0, 22, 30, 26],
+  check: [0, 16, 45, 16, 45, 24],
+  castle: [0, 14, 60, 18],
+  promote: [0, 12, 40, 12, 40, 30],
+  ok: 20,
+  bad: [0, 34, 55, 34],
+  win: [0, 22, 45, 22, 45, 60],
+  lose: [0, 60, 70, 90],
+  click: 8,
+};
+
+/**
+ * 소리 + 진동을 한 번에. 화면 코드에서는 이것만 부르면 된다.
+ * @param kind move|capture|check|castle|promote|ok|bad|win|lose|click
+ * @param st   설정 객체 ({sound, haptic})
+ */
+export function impact(kind, st) {
+  const s = st || {};
+  play(kind, s.sound !== false);
+  haptic(s.haptic !== false, kind);
+}
+
+/** 수 하나(chess.js move 객체) → 어떤 타격인지 */
+export function moveKind(m, chess) {
+  if (!m) return 'move';
+  // 메이트도 여기서는 체크로 본다 — 이긴 건지 진 건지는 부르는 쪽이 안다
+  if (chess && chess.isCheck && chess.isCheck()) return 'check';
+  if (m.promotion) return 'promote';
+  const castle = typeof m.isCastle === 'function' ? m.isCastle() : /^O-O/.test(m.san || '');
+  if (castle) return 'castle';
+  const cap = typeof m.isCapture === 'function' ? m.isCapture() : !!m.captured;
+  return cap ? 'capture' : 'move';
 }
 
 /* ---------------- 진행률 표시 ---------------- */

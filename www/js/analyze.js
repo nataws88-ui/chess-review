@@ -8,6 +8,7 @@
 import { Chess } from './lib/chess.js';
 import engine, { toScore, wdlPct } from './engine.js';
 import { findOpening } from './openings.js';
+import * as evalCache from './evalcache.js';
 
 export { findOpening };
 
@@ -180,11 +181,35 @@ export function isSacrifice(fenBefore, san) {
  * @returns {{meta, report, sans}}
  */
 export async function analyzeGame(pgn, opts = {}) {
+  /* 분석 기준은 둘 중 하나다.
+   *  - 시간(movetime ms)  : 기기가 느려도 끝나는 시간이 예측된다
+   *  - 깊이(depth)        : 기기가 빠를수록 빨리 끝나고, 결과가 늘 같다 */
+  const byDepth = !!opts.depth;
   const movetime = opts.movetime ?? 250;
+  const depth = opts.depth || null;
   const deepTime = opts.deepTime ?? Math.max(1200, movetime * 5);
+  const deepDepth = opts.deepDepth ?? (depth ? depth + 6 : null);
   const prog = opts.onProgress || (() => {});
   const sig = opts.signal || {};
   const chk = () => { if (sig.cancelled) throw new Error('취소됨'); };
+
+  /* 이어서 분석 — 이미 본 국면은 보관함에서 꺼내 쓴다.
+   * 오프닝처럼 판이 겹치는 구간에서 특히 많이 아낀다. */
+  const useCache = opts.resume !== false;
+  if (useCache) await evalCache.load();
+  let reused = 0;
+  const shallow = byDepth ? { depth } : { movetime };
+  const deepOpt = byDepth ? { depth: deepDepth } : { movetime: deepTime };
+
+  const look = async (fen, o) => {
+    if (useCache) {
+      const hit = evalCache.get(fen, o);
+      if (hit) { reused++; return hit; }
+    }
+    const r = await engine.analyse(fen, o);
+    if (useCache) evalCache.put(fen, r, o);
+    return r;
+  };
 
   const game = new Chess();
   game.loadPgn(pgn, { strict: false });
@@ -217,7 +242,7 @@ export async function analyzeGame(pgn, opts = {}) {
   for (let i = 0; i < n; i++) {
     chk();
     const fen = moves[i].before;
-    const r = await engine.analyse(fen, { movetime });
+    const r = await look(fen, shallow);
     const whiteToMove = fen.split(' ')[1] === 'w';
     const raw = toScore(r);
     const cp = whiteToMove ? raw : -raw;
@@ -225,7 +250,7 @@ export async function analyzeGame(pgn, opts = {}) {
     const line = uciToSan(fen, r.pv, 3);
     pvs.push(line);
     evals.push({ cp, w: whiteWin(r, whiteToMove, cp), best: line[0] || null });
-    prog({ phase: 'scan', i: i + 1, n });
+    prog({ phase: 'scan', i: i + 1, n, reused });
   }
 
   // 마지막 국면
@@ -235,7 +260,7 @@ export async function analyzeGame(pgn, opts = {}) {
     finalCp = last.isCheckmate() ? (last.turn() === 'w' ? -10000 : 10000) : 0;
     finalW = last.isCheckmate() ? (last.turn() === 'w' ? 0 : 100) : 50;
   } else {
-    const r = await engine.analyse(moves[n - 1].after, { movetime });
+    const r = await look(moves[n - 1].after, shallow);
     const whiteToMove = last.turn() === 'w';
     finalCp = whiteToMove ? toScore(r) : -toScore(r);
     finalW = whiteWin(r, whiteToMove, finalCp);
@@ -295,7 +320,7 @@ export async function analyzeGame(pgn, opts = {}) {
     const fl = flagged[k];
     try {
       // 후보수 3개를 한 번에 — 최선 말고 어떤 선택지가 있었는지 보여준다
-      const rs = await engine.analyseMulti(fl.fen, { movetime: deepTime, multipv: 3 });
+      const rs = await engine.analyseMulti(fl.fen, { ...deepOpt, multipv: 3 });
       const r1 = rs[0];
       if (!r1) { prog({ phase: 'deep', i: k + 1, n: flagged.length }); continue; }
       const bestLine = uciToSan(fl.fen, r1.pv, 4);
@@ -317,7 +342,7 @@ export async function analyzeGame(pgn, opts = {}) {
       const after = new Chess(fl.fen);
       after.move(fl.san);
       const fenAfter = after.fen();
-      const r2 = await engine.analyse(fenAfter, { movetime: deepTime });
+      const r2 = await look(fenAfter, deepOpt);
       const punishLine = uciToSan(fenAfter, r2.pv, 3);
 
       deep[fl.i] = { best: bestLine, punish: punishLine, alts };
@@ -362,7 +387,7 @@ export async function analyzeGame(pgn, opts = {}) {
       const i = pick[k];
       const fen = moves[i].before;
       try {
-        const res = await engine.analyseMulti(fen, { movetime: deepTime, multipv: 2 });
+        const res = await engine.analyseMulti(fen, { ...deepOpt, multipv: 2 });
         if (!res[0] || !res[1]) continue;
         const gain = Math.round((moverWin(res[0]) - moverWin(res[1])) * 10) / 10;
         const bestSan = uciToSan(fen, res[0].pv, 1)[0];
@@ -406,7 +431,9 @@ export async function analyzeGame(pgn, opts = {}) {
     },
     clk: clocks.length === n ? clocks : null,
     think,
-    movetime: movetime / 1000,
+    movetime: byDepth ? null : movetime / 1000,
+    depth: byDepth ? depth : null,
+    reused,
     engine: engine.id.name || 'Stockfish',
     engine2: null,
     verify, deep, gems,
@@ -425,6 +452,8 @@ export async function analyzeGame(pgn, opts = {}) {
     timeControl: headers.TimeControl || '',
     link: headers.Link || '',
   };
+
+  if (useCache) await evalCache.save().catch(() => {});
 
   return { meta, report, sans, pgn };
 }

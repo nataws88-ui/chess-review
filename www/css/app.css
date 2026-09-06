@@ -311,3 +311,119 @@ label.fld .k{display:block;font-size:.82rem;color:var(--sub);font-weight:700;mar
 .skel{background:linear-gradient(90deg,var(--card2) 25%,var(--line) 37%,var(--card2) 63%);
   background-size:400% 100%;animation:shim 1.3s linear infinite;border-radius:8px;height:14px}
 @keyframes shim{from{background-position:100% 0}to{background-position:0 0}}
+
+/* ==================== 분석판 ==================== */
+
+/* 국면 읽기가 찾아낸 것들 — 판 아래 한 줄 요약 */
+.ke-notes{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;justify-content:center}
+.ke-note{font-size:.74rem;font-weight:700;color:var(--sub);background:var(--card2);
+  border:1px solid var(--line2);border-radius:99px;padding:3px 9px}
+
+/* 엔진 후보 수 목록 */
+.lines{display:flex;flex-direction:column;gap:4px}
+.line{display:flex;align-items:baseline;gap:8px;padding:7px 9px;border-radius:9px;
+  background:var(--card2);border:1px solid var(--line);cursor:pointer}
+.line.top{border-color:var(--accent2)}
+.line-ev{font-weight:900;font-size:.86rem;min-width:52px;color:var(--fg)}
+.line-pv{flex:1;font-size:.8rem;color:var(--sub);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.line-wp{font-size:.72rem;color:var(--dim);font-weight:700;white-space:nowrap}
+
+/* 판 만들기(에디터) */
+.editbar{margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}
+.pc-chip{font-size:1.5rem;line-height:1;padding:4px 9px}
+
+/* FEN 상자 */
+.fenbox{background:var(--card2);border:1px solid var(--line);border-radius:9px;padding:8px 10px;
+  font-size:.7rem;word-break:break-all;color:var(--sub);line-height:1.5}
+.fenbox code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+
+/* 기보에서 지금 보고 있는 수 */
+.movelist .mv{cursor:pointer;border-radius:5px;padding:1px 3px}
+.movelist .mv.on{background:var(--accent);color:var(--on-accent);font-weight:800}
+
+/* 태그·필터 */
+.tagbar{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
+.tag{font-size:.72rem;font-weight:700;border-radius:99px;padding:3px 10px;
+  background:var(--card2);border:1px solid var(--line2);color:var(--sub)}
+.tag.on{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+.tag.fav{color:var(--gold)}
+
+/* 색 고르기 */
+.colorrow{display:flex;align-items:center;gap:10px;padding:9px 0}
+.colorrow input[type=color]{width:44px;height:32px;border:1px solid var(--line2);
+  border-radius:8px;background:none;padding:0}
+
+/* ==================== 대국 시계·수 강도 ==================== */
+.clocks{margin-bottom:8px;align-items:center}
+.clock{font-variant-numeric:tabular-nums;font-weight:900;font-size:1.15rem;
+  background:var(--card2);border:1px solid var(--line2);border-radius:9px;padding:5px 12px;color:var(--sub)}
+.clock.on{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+.strength{display:flex;align-items:center;justify-content:center;gap:2px;margin-top:8px;font-size:.85rem}
+
+/* 국면 읽기 설명 목록 */
+.kelist{margin-top:8px}
+.kelist .lrow{display:block;padding:7px 0;border-bottom:1px solid var(--line)}
+.kelist .lrow:last-child{border-bottom:0}
+
+/* 여러 개 고르기에서 골라 놓은 경기 */
+.card.picked{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+
+/* 배우기 슬라이드 점 */
+.dots{display:flex;gap:6px;justify-content:center;margin-top:10px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--line2);border:0;padding:0}
+.dot.on{background:var(--accent);width:20px;border-radius:99px}
+
+/* 전체 화면 — 판만 크게 */
+body.fullscreen .nav{display:none}
+body.fullscreen .top{display:none}
+body.fullscreen .screen .body{padding-top:8px}
+
+/* ---------- 타격감 (수가 놓이는 순간) ----------
+ * 도착 칸에서 고리가 퍼지고, 기물이 한 번 눌렸다 펴진다.
+ * 잡는 수·체크는 색과 굵기를 달리해 손끝에 남는 느낌을 다르게 했다. */
+.fx-ring{pointer-events:none;animation:fxRing .36s cubic-bezier(.2,.7,.3,1) forwards}
+@keyframes fxRing{
+  0%{transform:scale(.5);opacity:.95}
+  100%{transform:scale(1.35);opacity:0}}
+.fx-flash{pointer-events:none;animation:fxFlash .26s ease-out forwards}
+@keyframes fxFlash{
+  0%{transform:scale(.35);opacity:.75}
+  100%{transform:scale(1.15);opacity:0}}
+.pc.landed{animation:pcLand .22s ease-out}
+@keyframes pcLand{
+  0%{filter:brightness(1.75) drop-shadow(0 0 6px rgba(255,255,255,.7))}
+  100%{filter:none}}
+
+/* 잡는 수는 판이 아주 살짝 흔들린다 — 과하면 멀미가 나서 2px 로 묶었다 */
+.board-wrap.hit{animation:boardHit .16s ease-out}
+@keyframes boardHit{
+  0%{transform:translate(0,0)}
+  30%{transform:translate(2px,-2px)}
+  60%{transform:translate(-2px,1px)}
+  100%{transform:translate(0,0)}}
+
+/* ---------- 끌어서 옮기기 ---------- */
+.drag-ghost{filter:drop-shadow(0 8px 12px rgba(0,0,0,.55));transition:none}
+.drag-over{pointer-events:none;animation:dragOver .18s ease-out}
+@keyframes dragOver{from{opacity:0}to{opacity:1}}
+
+/* ---------- 훈련 입구·퍼즐·연습 ---------- */
+.card.row.tap{display:flex;align-items:center;gap:12px}
+.ic-big{font-size:28px;width:38px;text-align:center;flex:none;line-height:1}
+.puz-status{text-align:center;margin:0 0 10px;min-height:24px;font-size:15px}
+.puz-status .dim{font-size:13px}
+.good-txt{color:#48d17a}
+.bad-txt{color:#ef5b5b}
+.delta{font-size:13px;font-weight:700;margin-left:4px}
+.delta.up{color:#48d17a}
+.delta.down{color:#ef5b5b}
+.goalbar{display:flex;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:6px}
+.trow{display:flex;align-items:center;gap:8px;padding:8px 0;border-top:1px solid var(--line)}
+.trow:first-of-type{border-top:0}
+.chips.scroller{flex-wrap:nowrap;overflow-x:auto;padding-bottom:4px;
+  scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.chips.scroller::-webkit-scrollbar{display:none}
+.chips.scroller>.chip{flex:none}
+.puz-head{display:flex;gap:14px;align-items:center;flex-wrap:wrap;
+  font-size:14px;margin-bottom:8px;color:var(--dim)}
+.puz-head b{color:var(--tx);font-size:16px;margin-right:2px}

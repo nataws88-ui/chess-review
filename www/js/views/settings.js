@@ -1,8 +1,12 @@
 /* ⚙️ 설정 · 데이터 이전 · 정보 */
 
-import { h, nav, screen, toast, clear, saveFile, pickFile, isApp, Native, applyTheme } from '../ui.js';
-import { settings, setSetting, store, getSrs, setSrs, DEFAULTS } from '../store.js';
-import { THEMES, renderBoard } from '../board.js';
+import { h, nav, screen, toast, clear, saveFile, pickFile, pickBinary, isApp, Native, applyTheme, askNotify } from '../ui.js';
+import { settings, setSetting, store, getSrs, setSrs } from '../store.js';
+import { THEMES, THEME_KO as BOARD_KO, ARROW_SIZES, ARROW_SIZE_KO, renderBoard, boardOpts } from '../board.js';
+import { getState as puzzleState } from '../puzzles.js';
+import { listSets, importZip, deleteSet, applySet } from '../pieces.js';
+import { KEY_ELEMENTS } from '../insight.js';
+import * as evalCache from '../evalcache.js';
 import { peek, fingerprint, gameId, invalidate } from '../games.js';
 import { buildGame } from '../quizgen.js';
 
@@ -11,7 +15,7 @@ const SOURCE_URL = 'https://github.com/nataws88-ui/chess-review';
 const POLICY_URL = 'https://nataws88-ui.github.io/chess-review/store/privacy-policy.html';
 
 const MOVETIMES = [[150, '빠름'], [250, '보통'], [500, '정밀'], [1000, '최고']];
-const THEME_KO = { green: '클래식 그린', wood: '우드', ocean: '오션', slate: '슬레이트' };
+const THEME_KO = BOARD_KO;
 // 견본 판 — 양쪽 기물이 밝은 칸·어두운 칸에 골고루 놓인 국면
 const SAMPLE_FEN = 'r1bqk2r/pppp1ppp/2n2n2/2b1p3/2B1P3/2N2N2/PPPP1PPP/R1BQK2R w KQkq - 0 1';
 
@@ -62,14 +66,19 @@ export async function view(app) {
   // 판 색·밝기는 고른 즉시 바로 아래 견본에 반영된다 (경기 화면까지 안 가봐도 되게)
   const sample = h('div.board-wrap', { style: 'max-width:220px;margin:0 auto 12px' });
   const drawSample = () => renderBoard(sample, SAMPLE_FEN, {
-    theme: st.boardTheme, shade: st.boardShade, coords: st.showCoords,
+    ...boardOpts(st), drag: false,
+    // 화살표 굵기를 고른 자리에서 바로 확인할 수 있게 견본에도 하나 그린다
+    arrows: [{ f: 'e2', t: 'e4', kind: 'best' }],
   });
 
   const themeChips = h('div.chips.mb');
   Object.keys(THEMES).forEach((k) => {
     themeChips.appendChild(h('button.chip' + (st.boardTheme === k ? '.on' : ''), {
       onclick: async (e) => {
+        st.boardTheme = k;
+        st.boardCustom = null;
         await setSetting('boardTheme', k);
+        await setSetting('boardCustom', null);
         Array.from(themeChips.children).forEach((c) => c.classList.remove('on'));
         e.target.classList.add('on');
         drawSample();
@@ -88,6 +97,20 @@ export async function view(app) {
       },
     }, label));
   });
+  // 화살표 굵기 — 폰에서 손가락 옆으로 지나가는 화살표는 굵어야 눈에 든다
+  const arrowSeg = h('div.seg.mb');
+  Object.keys(ARROW_SIZES).forEach((k) => {
+    arrowSeg.appendChild(h('button' + ((st.arrowSize || 'big') === k ? '.on' : ''), {
+      onclick: async () => {
+        st.arrowSize = k;
+        await setSetting('arrowSize', k);
+        Array.from(arrowSeg.children).forEach((el, i) =>
+          el.classList.toggle('on', Object.keys(ARROW_SIZES)[i] === k));
+        drawSample();
+      },
+    }, ARROW_SIZE_KO[k]));
+  });
+
   const sw = (key, label) => {
     const el = h('div.sw' + (st[key] ? '.on' : ''));
     return h('div.switch', {
@@ -127,8 +150,12 @@ export async function view(app) {
     h('p.sub.mb', '판 밝기 — 어두운 곳에서 눈이 부시면 진하게 두세요'),
     shadeSeg,
     sample,
+    h('p.sub.mb', '화살표 굵기 — 최선의 수·위협을 가리키는 화살표'),
+    arrowSeg,
     sw('showCoords', '좌표 표시 (a~h, 1~8)'),
     sw('animate', '기물 이동 애니메이션'),
+    sw('dragMove', '기물을 끌어서(밀어서) 옮기기'),
+    sw('fx', '타격감 — 수를 놓을 때 파장·흔들림'),
     sw('evalBar', '복기할 때 판 옆에 승률 막대'),
     sw('swipeMove', '판을 좌우로 밀어 수 이동'),
     sw('sound', '소리'),
@@ -136,6 +163,18 @@ export async function view(app) {
     h('label.fld.mt', { style: 'margin-top:12px' },
       h('span.k', '자동 재생 간격 (0.1초 단위 — 9 = 0.9초)'), speed)));
   drawSample();
+
+  /* ---- 판 꾸미기 (Chessis 이식) ---- */
+  b.appendChild(await boardLookCard(st, drawSample));
+
+  /* ---- 국면 읽기·위협 ---- */
+  b.appendChild(insightDefaultsCard(st));
+
+  /* ---- 엔진·분석 ---- */
+  b.appendChild(analysisCard(st));
+
+  /* ---- 대국 ---- */
+  b.appendChild(playCard(st));
 
   /* ---- 데이터 ---- */
   const dataBox = h('div.card',
@@ -151,6 +190,8 @@ export async function view(app) {
         if (!confirm('저장된 경기와 훈련 기록을 모두 지웁니다. 계속할까요?')) return;
         await store.clearGames();
         await setSrs({});
+        await store.set('puzzleState', null);
+        await store.set('practiceDone', null);
         invalidate();
         toast('모두 지웠습니다');
         nav('/');
@@ -160,11 +201,34 @@ export async function view(app) {
 
   const games = await store.allGames();
   const srs = await getSrs();
+  const puz = await puzzleState();
+  await evalCache.load();
+  const cacheN = evalCache.size();
   b.appendChild(h('div.card',
     h('div.grid3',
       h('div.stat', h('div.k', '저장된 경기'), h('div.v', games.length)),
       h('div.stat', h('div.k', '훈련 카드'), h('div.v', Object.keys(srs).length)),
-      h('div.stat', h('div.k', '용량'), h('div.v', approxSize(games))))));
+      h('div.stat', h('div.k', '용량'), h('div.v', approxSize(games)))),
+    h('div.switch', { style: 'margin-top:8px' },
+      h('span', '퍼즐 점수 ', h('b', String(puz.rating)),
+        h('span.dim', ` · 푼 문제 ${Object.keys(puz.solved || {}).length}개`)),
+      h('button.btn.sm.ghost', {
+        onclick: async () => {
+          if (!confirm('퍼즐 점수와 연습 진도를 처음으로 되돌릴까요? (경기·훈련 카드는 그대로입니다)')) return;
+          await store.set('puzzleState', null);
+          await store.set('practiceDone', null);
+          toast('되돌렸습니다');
+        },
+      }, '되돌리기')),
+    h('div.switch', { style: 'margin-top:8px' },
+      h('span', '분석해 둔 국면 ', h('b', String(cacheN)), h('span.dim', ' 개 — 다시 분석할 때 건너뜁니다')),
+      h('button.btn.sm.ghost', {
+        onclick: async () => {
+          if (!confirm('분석해 둔 국면 기록을 비울까요? (경기·훈련 기록은 그대로입니다)')) return;
+          await evalCache.clear();
+          toast('비웠습니다');
+        },
+      }, '비우기'))));
 
   /* ---- 광고 ---- */
   if (isApp) {
@@ -194,11 +258,20 @@ export async function view(app) {
   async function doExport() {
     const all = await store.allGames();
     const data = {
-      app: 'chess-review', v: 1,
+      app: 'chess-review', v: 3,
       exportedAt: new Date().toISOString(),
       settings: await settings(),
       srs: await getSrs(),
-      games: all.map((g) => ({ id: g.id, pgn: g.pgn, meta: g.meta, report: g.report, addedAt: g.addedAt, source: g.source })),
+      tags: await store.get('tags', {}),
+      pieceSets: await store.get('pieceSets', {}),
+      // v3 — 퍼즐 점수·연습 진도도 같이 (기기를 바꿔도 기록이 살아남게)
+      puzzleState: await store.get('puzzleState', null),
+      practiceDone: await store.get('practiceDone', null),
+      games: all.map((g) => ({
+        id: g.id, pgn: g.pgn, meta: g.meta, report: g.report,
+        addedAt: g.addedAt, source: g.source,
+        tags: g.tags || null, fav: g.fav || false,      // 태그·즐겨찾기도 함께 (v2)
+      })),
     };
     const d = new Date();
     const name = `체스복기왕-백업-${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}.json`;
@@ -227,6 +300,8 @@ export async function view(app) {
           id: g.id || gameId(meta), pgn: g.pgn, meta, report: g.report || null, fp,
           nply: info.sans.length, addedAt: g.addedAt || Date.now(), source: g.source || 'import',
         };
+        if (g.tags) rec.tags = g.tags;
+        if (g.fav) rec.fav = true;
         const built = buildGame(rec, cur.myName);
         rec.nprob = built.problems.length;
         rec.acc = rec.report ? rec.report.acc : null;
@@ -246,10 +321,251 @@ export async function view(app) {
     }
     if (data.settings && data.settings.myName && !cur.myName) await setSetting('myName', data.settings.myName);
 
+    // 태그 사전·기물 세트도 합친다 (v2 백업)
+    if (data.tags && typeof data.tags === 'object') {
+      await store.set('tags', { ...(await store.get('tags', {})), ...data.tags });
+    }
+    if (data.pieceSets && typeof data.pieceSets === 'object') {
+      await store.set('pieceSets', { ...(await store.get('pieceSets', {})), ...data.pieceSets });
+    }
+    // 퍼즐·연습 기록 (v3) — 더 많이 푼 쪽을 남긴다
+    if (data.puzzleState && typeof data.puzzleState === 'object') {
+      const cur2 = await store.get('puzzleState', null);
+      const mineN = cur2 && cur2.solved ? Object.keys(cur2.solved).length : 0;
+      const theirN = data.puzzleState.solved ? Object.keys(data.puzzleState.solved).length : 0;
+      if (theirN > mineN) await store.set('puzzleState', data.puzzleState);
+    }
+    if (data.practiceDone && typeof data.practiceDone === 'object') {
+      await store.set('practiceDone', { ...(await store.get('practiceDone', {})), ...data.practiceDone });
+    }
+
     invalidate();
     toast(`${added}판 추가 · ${skipped}판 건너뜀`);
     setTimeout(() => nav('/'), 900);
   }
+}
+
+/* ==================== 판 꾸미기 ==================== */
+
+/** 켜고 끄는 줄 하나 — 저장까지 같이 한다 */
+function toggle(st, key, label, note, after) {
+  const el = h('div.sw' + (st[key] ? '.on' : ''));
+  return h('div.switch', {
+    onclick: async () => {
+      st[key] = !st[key];
+      await setSetting(key, st[key]);
+      el.classList.toggle('on', st[key]);
+      if (after) after();
+    },
+  }, h('span', label, note ? h('span.dim', ' · ' + note) : null), el);
+}
+
+/** 여러 개 중 하나 고르기 */
+function pick(st, key, opts, after) {
+  const seg = h('div.seg.mb');
+  opts.forEach(([v, label]) => {
+    seg.appendChild(h('button' + (st[key] === v ? '.on' : ''), {
+      onclick: async () => {
+        st[key] = v;
+        await setSetting(key, v);
+        Array.from(seg.children).forEach((el, i) => el.classList.toggle('on', opts[i][0] === v));
+        if (after) after();
+      },
+    }, label));
+  });
+  return seg;
+}
+
+/** 숫자 입력 한 줄 */
+function num(st, key, label, min, max, after) {
+  const inp = h('input', { type: 'number', min, max, value: st[key] });
+  inp.addEventListener('change', async () => {
+    const v = Math.max(min, Math.min(max, +inp.value || min));
+    inp.value = v;
+    st[key] = v;
+    await setSetting(key, v);
+    if (after) after();
+  });
+  return h('label.fld.mt', h('span.k', label), inp);
+}
+
+async function boardLookCard(st, redraw) {
+  const card = h('div.card', h('h3', '판 꾸미기'),
+    h('p.sub.mb', '기물 모양·칸 색·배경 그림까지 바꿀 수 있습니다.'));
+
+  /* 기물 세트 */
+  const setRow = h('div.chips.mb');
+  async function paintSets() {
+    clear(setRow);
+    const list = await listSets();
+    for (const it of list) {
+      setRow.appendChild(h('button.chip.sm' + (st.pieceSet === it.id ? '.on' : ''), {
+        onclick: async () => {
+          st.pieceSet = it.id;
+          await setSetting('pieceSet', it.id);
+          await applySet(it.id);
+          await paintSets();
+          redraw();
+        },
+        oncontextmenu: (e) => e.preventDefault(),
+      }, it.name));
+    }
+    // 내가 넣은 세트는 길게 눌러 지우는 대신 지우기 칩을 따로 둔다(웹뷰에서 롱프레스는 불안정)
+    for (const it of list.filter((x) => !x.builtin)) {
+      setRow.appendChild(h('button.chip.sm', {
+        style: 'color:#ffb4b4',
+        onclick: async () => {
+          if (!confirm(`"${it.name}" 세트를 지울까요?`)) return;
+          await deleteSet(it.id);
+          if (st.pieceSet === it.id) {
+            st.pieceSet = 'cburnett';
+            await setSetting('pieceSet', 'cburnett');
+            await applySet('cburnett');
+          }
+          await paintSets();
+          redraw();
+        },
+      }, `🗑 ${it.name}`));
+    }
+  }
+  await paintSets();
+
+  card.appendChild(h('p.sub.mb', '기물 모양'));
+  card.appendChild(setRow);
+  card.appendChild(h('button.btn.sm.wide.mb', {
+    onclick: async () => {
+      let f;
+      try { f = await pickBinary('application/zip'); } catch (e) { return; }
+      try {
+        const name = (f.name || 'zip').replace(/\.zip$/i, '').split('/').pop();
+        const r = await importZip(name, f.buffer);
+        st.pieceSet = r.id;
+        await setSetting('pieceSet', r.id);
+        await applySet(r.id);
+        await paintSets();
+        redraw();
+        toast(`"${r.name}" 세트를 넣었습니다`);
+      } catch (e) { toast(e.message); }
+    },
+  }, '📦 ZIP 으로 기물 세트 넣기'));
+  card.appendChild(h('p.dim.mb',
+    'wp.svg · bk.svg 처럼 12개 SVG 가 든 ZIP 이면 됩니다. 리체스·체스닷컴에서 쓰는 세트를 그대로 넣을 수 있습니다.'));
+
+  /* 칸 색 직접 고르기 */
+  const cur = st.boardCustom || THEMES[st.boardTheme] || THEMES.green;
+  const lightIn = h('input', { type: 'color', value: cur.l });
+  const darkIn = h('input', { type: 'color', value: cur.d });
+  const applyColors = async () => {
+    st.boardCustom = { l: lightIn.value, d: darkIn.value };
+    await setSetting('boardCustom', st.boardCustom);
+    redraw();
+  };
+  lightIn.addEventListener('change', applyColors);
+  darkIn.addEventListener('change', applyColors);
+  card.appendChild(h('div.colorrow', h('span', { style: 'flex:1' }, '밝은 칸 색'), lightIn));
+  card.appendChild(h('div.colorrow', h('span', { style: 'flex:1' }, '어두운 칸 색'), darkIn));
+  card.appendChild(h('button.btn.sm.wide.mb', {
+    onclick: async () => {
+      st.boardCustom = null;
+      await setSetting('boardCustom', null);
+      redraw();
+      toast('고른 색을 지우고 테마 색으로 돌아갑니다');
+    },
+  }, '고른 색 지우기'));
+
+  /* 배경 그림 */
+  card.appendChild(h('div.btn-row.mb',
+    h('button.btn.sm', {
+      onclick: async () => {
+        let f;
+        try { f = await pickBinary('image/*'); } catch (e) { return; }
+        try {
+          const bytes = new Uint8Array(f.buffer);
+          if (bytes.length > 1400000) return toast('그림이 너무 큽니다 (1.4MB 이하)');
+          let bin = '';
+          for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+          const mime = /\.png$/i.test(f.name || '') ? 'image/png' : 'image/jpeg';
+          st.boardBg = `data:${mime};base64,` + btoa(bin);
+          await setSetting('boardBg', st.boardBg);
+          redraw();
+          toast('배경 그림을 넣었습니다');
+        } catch (e) { toast('그림을 읽지 못했습니다'); }
+      },
+    }, '🖼 판 배경 그림'),
+    h('button.btn.sm.ghost', {
+      onclick: async () => { st.boardBg = null; await setSetting('boardBg', null); redraw(); },
+    }, '배경 지우기')));
+
+  /* 표기·표시 */
+  card.appendChild(h('p.sub.mb.mt', '마지막 수 강조'));
+  card.appendChild(pick(st, 'lastMoveStyle', [['square', '칸 전체'], ['dot', '점'], ['frame', '테두리']]));
+  card.appendChild(toggle(st, 'legalDots', '갈 수 있는 칸 점으로 표시'));
+  card.appendChild(toggle(st, 'figurine', '기보를 그림기물로', '♘f3'));
+  return card;
+}
+
+/* ==================== 국면 읽기·위협 ==================== */
+
+function insightDefaultsCard(st) {
+  const elems = { ...(st.keyElems || {}) };
+  const chips = h('div.chips.mb');
+  for (const [id, name, why] of KEY_ELEMENTS) {
+    chips.appendChild(h('button.chip.sm' + (elems[id] ? '.on' : ''), {
+      onclick: async (e) => {
+        elems[id] = !elems[id];
+        e.currentTarget.classList.toggle('on', elems[id]);
+        st.keyElems = elems;
+        await setSetting('keyElems', elems);
+      },
+      title: why,
+    }, name));
+  }
+  const list = h('div.kelist');
+  for (const [, name, why] of KEY_ELEMENTS) {
+    list.appendChild(h('div.lrow', h('div', h('b', name), h('p.sub', why))));
+  }
+  return h('div.card',
+    h('h3', '🔍 국면 읽기'),
+    h('p.sub.mb', '판 위에 지금 무엇이 걸려 있는지 겹쳐 그립니다. 엔진 없이 판만 보고 내므로 즉시 뜹니다.'),
+    chips,
+    toggle(st, 'elemsInPlay', '대국 중에도 보이기'),
+    toggle(st, 'showThreats', '위협 기본으로 켜기'),
+    toggle(st, 'threatsInPlay', '대국 중에도 위협 보이기'),
+    h('button.btn.wide.mt', { onclick: () => nav('/learn') }, '🎓 예제 국면으로 배우기'),
+    h('details.mt', h('summary.sub', '각 항목이 무슨 뜻인가요?'), list));
+}
+
+/* ==================== 엔진·분석 ==================== */
+
+function analysisCard(st) {
+  return h('div.card',
+    h('h3', '🤖 엔진·분석'),
+    h('p.sub.mb', '분석 기준 — 시간으로 할지, 깊이(depth)로 할지'),
+    pick(st, 'analysisBy', [['time', '시간'], ['depth', '깊이']]),
+    h('p.dim.mb', '시간 기준은 기기가 느려도 예측 가능한 시간에 끝납니다. 깊이 기준은 기기가 빠를수록 빨리 끝나고 결과가 항상 같습니다.'),
+    num(st, 'quickTime', '빠른 분석 — 수당 시간 (ms)', 80, 2000),
+    num(st, 'quickDepth', '빠른 분석 — 수당 깊이', 6, 24),
+    num(st, 'deepTime', '정밀 분석 — 수당 시간 (ms)', 300, 10000),
+    num(st, 'deepDepth', '정밀 분석 — 수당 깊이', 10, 30),
+    num(st, 'engineLines', '분석판 후보 수(라인) 개수', 1, 5),
+    toggle(st, 'engineArrows', '분석판에 엔진 화살표'),
+    toggle(st, 'resumeAnalysis', '다시 분석할 때 이미 본 국면은 건너뛰기'),
+    toggle(st, 'notifyDone', '분석이 끝나면 알림', '앱을 벗어나 있을 때만', () => { if (st.notifyDone) askNotify(); }));
+}
+
+/* ==================== 대국 ==================== */
+
+function playCard(st) {
+  return h('div.card',
+    h('h3', '⚔️ 대국'),
+    h('p.sub.mb', '시간 제한 — 0분이면 시간을 재지 않습니다.'),
+    num(st, 'clockMin', '한 사람당 시간 (분)', 0, 180),
+    num(st, 'clockInc', '한 수마다 더하는 시간 (초)', 0, 60),
+    toggle(st, 'chess960', '무작위 배치 (체스960)', '뒷줄을 섞는다 · 캐슬링은 없음'),
+    toggle(st, 'pauseOnBlunder', '블런더를 두면 멈추고 알려 주기'),
+    toggle(st, 'pauseOnMistake', '실수를 둬도 멈추기'),
+    toggle(st, 'showMoveStrength', '내 수의 강도 실시간 표시'),
+    toggle(st, 'showOppStrength', '상대 수의 강도도 표시'));
 }
 
 function approxSize(games) {

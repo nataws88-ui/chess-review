@@ -1,8 +1,8 @@
 /* 경기 가져오기 — Chess.com / 붙여넣기 / 파일 / 공유받기 */
 
-import { h, nav, screen, toast, progressBar, httpGet, pickFile, keepAwake, isApp, play, adBreak } from '../ui.js';
+import { h, nav, screen, toast, progressBar, httpGet, pickFile, keepAwake, isApp, play, adBreak, notify } from '../ui.js';
 import { settings, setSetting, store } from '../store.js';
-import { splitPgn, peek, analyzeAndSave, fingerprint, chessComUrl, lichessUrl, invalidate } from '../games.js';
+import { splitPgn, peek, analyzeAndSave, fingerprint, chessComUrl, lichessUrl, invalidate, analysisOpts } from '../games.js';
 import { resultKo } from '../quizgen.js';
 
 export async function view(app) {
@@ -19,6 +19,13 @@ export async function view(app) {
   } catch (e) {}
 
   const listBox = h('div');
+
+  /* 경기 화면에서 「다시 분석」으로 들어온 경우 — 그 판만 바로 목록에 올린다 */
+  const again = (/[?&]again=([^&]+)/.exec(location.hash || '') || [])[1];
+  if (again) {
+    const g = await store.getGame(decodeURIComponent(again));
+    if (g) incoming = g.pgn;
+  }
   const paste = h('textarea', {
     placeholder: '[Event "..."]\n1. e4 e5 2. Nf3 ...\n\n체스닷컴 → 게임 공유 → PGN 복사 후 붙여넣기\n(여러 판을 한꺼번에 붙여넣어도 됩니다)',
   });
@@ -53,7 +60,9 @@ export async function view(app) {
   // ---- 2. 붙여넣기 / 파일 ----
   b.appendChild(h('div.card',
     h('h3', '📋 PGN 직접 넣기'),
-    h('p.sub.mb', incoming ? '공유받은 PGN이 채워졌습니다. 확인 후 추가하세요.' : '앱 목록에서 "체스 복기왕"으로 공유해도 여기로 들어옵니다.'),
+    h('p.sub.mb', again ? '이 경기를 다시 분석합니다. 태그·즐겨찾기는 그대로 남습니다.'
+      : incoming ? '공유받은 PGN이 채워졌습니다. 확인 후 추가하세요.'
+      : '앱 목록에서 "체스 복기왕"으로 공유해도 여기로 들어옵니다.'),
     paste,
     h('div.btn-row.mt',
       h('button.btn.primary', { onclick: () => addFromText(paste.value) }, '이 PGN 추가'),
@@ -135,7 +144,8 @@ export async function view(app) {
       try {
         const info = peek(p);
         const fp = fingerprint(info.sans);
-        items.push({ pgn: p, meta: info.meta, fp, dup: have.has(fp), plies: info.sans.length, sel: !have.has(fp) });
+        // 「다시 분석」으로 들어왔으면 이미 있는 판이어도 골라 둔다
+        items.push({ pgn: p, meta: info.meta, fp, dup: have.has(fp), plies: info.sans.length, sel: again ? true : !have.has(fp) });
       } catch (e) { /* 못 읽는 판은 건너뛴다 */ }
     }
     if (!items.length) return toast('읽을 수 있는 경기가 없습니다');
@@ -145,9 +155,30 @@ export async function view(app) {
     const head = h('div.row.mb', h('h3', `가져올 경기 ${items.length}판`), h('div.spacer'),
       h('button.btn.sm.ghost', { onclick: () => { items.forEach((i) => { i.sel = !i.dup; }); paint(); } }, '새 경기만'));
     const rows = h('div');
-    const go = h('button.btn.primary.wide.mt', { onclick: () => runAnalysis(items.filter((i) => i.sel), source) }, '분석 시작');
+
+    /* 빠른 리포트 / 정밀 리포트 — Chessis 의 Quick·Deep Report.
+     * 빠른 쪽은 블런더·놓친 승기를 잡는 데 충분하고, 부정확·실수까지 정확히 보려면 정밀이 필요하다. */
+    let level = st.reportLevel || 'quick';
+    const levelSeg = h('div.seg.mt',
+      h('button' + (level === 'quick' ? '.on' : ''), {
+        onclick: async () => { level = 'quick'; await setSetting('reportLevel', level); mark(); },
+      }, '빠른 리포트'),
+      h('button' + (level === 'deep' ? '.on' : ''), {
+        onclick: async () => { level = 'deep'; await setSetting('reportLevel', level); mark(); },
+      }, '정밀 리포트'));
+    const levelNote = h('p.dim', '');
+    const mark = () => {
+      Array.from(levelSeg.children).forEach((el, k) => el.classList.toggle('on', (k === 0) === (level === 'quick')));
+      levelNote.textContent = level === 'deep'
+        ? '국면마다 더 깊이 봅니다. 오래 걸리지만 부정확·실수 판정이 정확합니다.'
+        : '블런더·놓친 승기를 잡는 데는 이것으로 충분합니다.';
+    };
+    mark();
+
+    const go = h('button.btn.primary.wide.mt', { onclick: () => runAnalysis(items.filter((i) => i.sel), source, level) }, '분석 시작');
     listBox.appendChild(h('div.card', head, rows,
-      h('p.dim.mt', `이미 있는 경기 ${items.length - newCount}판은 기본으로 빼두었습니다.`), go));
+      h('p.dim.mt', `이미 있는 경기 ${items.length - newCount}판은 기본으로 빼두었습니다.`),
+      levelSeg, levelNote, go));
 
     function paint() {
       rows.innerHTML = '';
@@ -172,15 +203,19 @@ export async function view(app) {
     listBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
 
-  async function runAnalysis(items, source) {
+  async function runAnalysis(items, source, level) {
     if (!items.length) return;
     if (!isApp) return toast('엔진 분석은 앱에서만 가능합니다');
     const st2 = await settings();
+    level = level || st2.reportLevel || 'quick';
+    const base = analysisOpts(st2, level);
+    const how = base.depth ? `깊이 ${base.depth}` : `수당 ${base.movetime}ms`;
     const signal = { cancelled: false };
     const pb = progressBar();
     const cancel = h('button.btn.wide.mt', { onclick: () => { signal.cancelled = true; toast('취소하는 중…'); } }, '취소');
-    const panel = h('div.card', h('h3', '🔎 엔진 분석중'),
-      h('p.sub', '수마다 스톡피시가 최선수를 계산합니다. 화면을 꺼도 됩니다.'),
+    const panel = h('div.card',
+      h('h3', level === 'deep' ? '🔬 정밀 분석중' : '🔎 엔진 분석중'),
+      h('p.sub', `${how} · 수마다 스톡피시가 최선수를 계산합니다. 화면을 꺼도 됩니다.`),
       pb.root, cancel);
     listBox.innerHTML = '';
     listBox.appendChild(panel);
@@ -192,10 +227,10 @@ export async function view(app) {
       for (const it of items) {
         pb.set(done / total * 100, `${done + 1}/${total}판 — 준비중`);
         await analyzeAndSave(it.pgn, {
-          source, signal, movetime: st2.movetime,
-          onProgress: ({ phase, i, n }) => {
+          source, signal, level,
+          onProgress: ({ phase, i, n, reused }) => {
             const inner = n ? i / n : 0;
-            const label = phase === 'scan' ? `${i}/${n}수 분석`
+            const label = phase === 'scan' ? `${i}/${n}수 분석${reused ? ` (${reused}개는 이미 본 국면)` : ''}`
               : phase === 'deep' ? `실수 정밀 재검증 ${i}/${n}`
               : `명수 판정 ${i}/${n}`;
             const weight = phase === 'scan' ? 0.75 : phase === 'deep' ? 0.2 : 0.05;
@@ -210,6 +245,8 @@ export async function view(app) {
       pb.set(100, '완료');
       play('win', st2.sound);
       toast(`${added}판 분석 완료`);
+      // 앱을 벗어나 있으면 알림으로 알려 준다 (Chessis 의 "Analysis Completed")
+      if (st2.notifyDone !== false) notify('🔎 분석이 끝났습니다', `${added}판 · 눌러서 결과 보기`);
       nav('/');
       adBreak('analysis');   // 분석이 끝나 손을 놓은 순간 — 광고를 넣기에 가장 덜 방해되는 지점
     } catch (e) {

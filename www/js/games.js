@@ -91,10 +91,30 @@ export async function findDuplicate(fp) {
 }
 
 /** 한 판 분석 후 저장 */
+/**
+ * 분석 기준을 설정에서 만들어 낸다.
+ * @param {object} st  설정
+ * @param {'quick'|'deep'} level  빠른 리포트 / 정밀 리포트
+ */
+export function analysisOpts(st, level = 'quick') {
+  const byDepth = st.analysisBy === 'depth';
+  if (byDepth) {
+    return {
+      depth: level === 'deep' ? (st.deepDepth || 18) : (st.quickDepth || 12),
+      deepDepth: (st.deepDepth || 18) + (level === 'deep' ? 4 : 2),
+    };
+  }
+  const mt = level === 'deep' ? (st.deepTime || 1200) : (st.quickTime || st.movetime || 250);
+  return { movetime: mt, deepTime: Math.max(mt * 4, st.deepTime || 1200) };
+}
+
 export async function analyzeAndSave(pgn, opts = {}) {
   const st = await settings();
+  const base = analysisOpts(st, opts.level || 'quick');
   const { meta, report, sans } = await analyzeGame(pgn, {
-    movetime: opts.movetime ?? st.movetime,
+    ...base,
+    ...(opts.movetime ? { movetime: opts.movetime, depth: null } : {}),
+    resume: opts.resume ?? (st.resumeAnalysis !== false),
     onProgress: opts.onProgress,
     signal: opts.signal,
   });
@@ -109,7 +129,15 @@ export async function analyzeAndSave(pgn, opts = {}) {
     addedAt: Date.now(),
     source: opts.source || 'manual',
     nply: sans.length,
+    level: opts.level || 'quick',
   };
+  // 다시 분석한 경우 태그·즐겨찾기 같은 사용자 표시는 그대로 살린다
+  // (지문이 같을 때만 — 다르면 다른 판이라 새 id 를 받는다)
+  if (existing && existing.fp === fp) {
+    if (existing.tags) rec.tags = existing.tags;
+    if (existing.fav) rec.fav = existing.fav;
+    if (existing.addedAt) rec.addedAt = existing.addedAt;
+  }
   const built = buildGame(rec, st.myName);
   rec.nprob = built.problems.length;
   rec.acc = report.acc;
@@ -137,6 +165,13 @@ export async function loadBuilt(id) {
 export function invalidate(id) {
   for (const k of Array.from(cache.keys())) if (!id || k.startsWith(id + '|')) cache.delete(k);
   cardsCache = null;
+  // 경기가 바뀌면 거기서 캐 낸 퍼즐도 다시 캐야 한다
+  puzzlesChanged();
+}
+
+/** puzzles.js 를 여기서 정적으로 부르면 서로 물고 도는(순환) 임포트가 된다 */
+function puzzlesChanged() {
+  import('./puzzles.js').then((m) => m.invalidate()).catch(() => {});
 }
 
 let cardsCache = null;

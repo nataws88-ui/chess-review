@@ -1,9 +1,12 @@
 /* 한 경기 화면 — 🧩 문제 / 🎬 복기 / 📊 리포트 */
 
-import { h, nav, screen, toast, $, clear, onSwipe, cssVar, fmtSec } from '../ui.js';
-import { renderBoard, addMark, lineArrows } from '../board.js';
-import { settings, store } from '../store.js';
-import { loadBuilt } from '../games.js';
+import { h, nav, screen, toast, clear, onSwipe, cssVar, fmtSec, copyText, impact } from '../ui.js';
+import { renderBoard, addMark, lineArrows, boardOpts } from '../board.js';
+import { settings, setSetting, store } from '../store.js';
+import { loadBuilt, invalidate } from '../games.js';
+import { readPosition, readThreats, DEFAULT_ELEMS } from '../insight.js';
+import { figurine } from '../notation.js';
+import { tags, setGameTags, toggleFav } from '../library.js';
 import { resultKo, qualityPct, QUALITY, QUALITY_ORDER } from '../quizgen.js';
 import { mountQuiz } from './quiz.js';
 import { accColor } from './home.js';
@@ -69,7 +72,11 @@ export async function view(app, params) {
     }, label));
   }
 
-  let reviewStart = 0;
+  // 국면 검색에서 "그 수로 가기"로 넘어오면 #/game/…/review?ply=12 형태로 온다
+  let reviewStart = (() => {
+    const m = /[?&]ply=(\d+)/.exec(location.hash || '');
+    return m ? parseInt(m[1], 10) : 0;
+  })();
   let reviewCleanup = null; // 복기 탭을 떠날 때 자동재생 타이머를 끄는 함수
   const qCycle = {};        // 등급별로 몇 번째 수까지 봤는지 (누를 때마다 다음 수)
 
@@ -98,20 +105,80 @@ export async function view(app, params) {
   }
   paint();
 
-  function menu() {
+  async function menu() {
+    const rec = await store.getGame(params.id);
+    const tagMap = await tags();
+    const mine = new Set((rec && rec.tags) || []);
+
+    const tagBar = h('div.tagbar');
+    for (const [id, t] of Object.entries(tagMap)) {
+      tagBar.appendChild(h('button.tag' + (mine.has(id) ? '.on' : ''), {
+        onclick: async (e) => {
+          if (mine.has(id)) mine.delete(id); else mine.add(id);
+          e.currentTarget.classList.toggle('on', mine.has(id));
+          await setGameTags(params.id, [...mine]);
+        },
+      }, t.name));
+    }
+    if (!Object.keys(tagMap).length) tagBar.appendChild(h('span.dim', '태그는 경기 목록 화면에서 만듭니다'));
+
     const box = h('div.card',
       h('h3', '이 경기'),
-      h('button.btn.wide.mb', { onclick: () => { navigator.clipboard && navigator.clipboard.writeText(built.rec.pgn); toast('PGN을 복사했습니다'); } }, '📋 PGN 복사'),
-      meta.link ? h('a.btn.wide.mb', { href: meta.link, target: '_blank' }, '🔗 체스닷컴에서 보기') : null,
+      h('button.btn.wide.mb', {
+        onclick: async () => {
+          const on = await toggleFav(params.id);
+          toast(on ? '즐겨찾기에 넣었습니다' : '즐겨찾기에서 뺐습니다');
+        },
+      }, (rec && rec.fav) ? '★ 즐겨찾기 해제' : '☆ 즐겨찾기'),
+      h('p.dim.mb', '태그'),
+      tagBar,
+      h('div.btn-row.mt.mb',
+        h('button.btn.sm', { onclick: () => copyText(built.rec.pgn, 'PGN을 복사했습니다') }, '📋 PGN 복사'),
+        h('button.btn.sm', {
+          onclick: async () => {
+            await store.set('boardFen', (built.plies.length ? built.plies[built.plies.length - 1].fen : (built.startFen || START)));
+            nav('/board');
+          },
+        }, '🔬 분석판으로')),
+      h('button.btn.wide.mb', { onclick: editPgn }, '✏️ PGN 고치기'),
+      h('button.btn.wide.mb', { onclick: () => nav('/import?again=' + encodeURIComponent(params.id)) }, '🔄 다시 분석'),
+      meta.link ? h('a.btn.wide.mb', { href: meta.link, target: '_blank' }, '🔗 원본 사이트에서 보기') : null,
       h('button.btn.wide', {
         style: 'border-color:#5c2f2f;color:#ffb4b4',
         onclick: async () => {
           if (!confirm('이 경기를 삭제할까요? (훈련 기록도 함께 사라집니다)')) return;
           await store.delGame(params.id);
+          invalidate(params.id);
           toast('삭제했습니다');
           nav('/');
         },
-      }, '🗑 이 경기 삭제'));
+      }, '🗑 이 경기 삭제'),
+      h('button.btn.wide.ghost.mt', { onclick: () => paint() }, '닫기'));
+    clear(pane);
+    pane.appendChild(box);
+  }
+
+  /** PGN 을 직접 고친다 (Chessis 의 "Edit Game Pgn"). 고치면 다시 분석해야 한다 */
+  async function editPgn() {
+    const ta = h('textarea', { rows: 10, style: 'width:100%' });
+    ta.value = built.rec.pgn;
+    const box = h('div.card',
+      h('h3', 'PGN 고치기'),
+      h('p.sub.mb', '수를 고치면 분석 결과가 맞지 않게 됩니다. 고친 뒤에는 다시 분석하세요.'),
+      ta,
+      h('div.btn-row.mt',
+        h('button.btn', {
+          onclick: async () => {
+            const rec = await store.getGame(params.id);
+            if (!rec) return toast('경기를 찾을 수 없습니다');
+            rec.pgn = ta.value;
+            await store.putGame(rec);
+            invalidate(params.id);
+            toast('저장했습니다 — 다시 분석하세요');
+            location.reload();
+          },
+        }, '저장'),
+        h('button.btn.ghost', { onclick: () => paint() }, '취소')));
     clear(pane);
     pane.appendChild(box);
   }
@@ -168,6 +235,11 @@ export async function view(app, params) {
     let showArrows = false;
     let flipped = false;
     let timer = null;
+    // 국면 읽기·위협 — 분석판과 같은 겹쳐 그리기를 복기에서도 쓴다
+    let showElems = !!st.showElems;
+    let showThreats = !!st.showThreats;
+    const elems = { ...DEFAULT_ELEMS, ...(st.keyElems || {}) };
+    const threatMode = { material: true, mate: true, undef: true, ...(st.threatMode || {}) };
 
     const boardHost = h('div.board-wrap');
     const bar = evalBar();
@@ -189,8 +261,36 @@ export async function view(app, params) {
         onclick: (e) => { showArrows = !showArrows; e.currentTarget.classList.toggle('on'); draw(); },
       }, '🏹 최선'));
 
+    const insightRow = h('div.row', { style: 'gap:6px;margin-top:6px;flex-wrap:wrap' },
+      h('button.btn.sm' + (showElems ? '.on' : ''), {
+        onclick: async (e) => {
+          showElems = !showElems;
+          e.currentTarget.classList.toggle('on', showElems);
+          await setSetting('showElems', showElems);
+          draw();
+        },
+      }, '🔍 국면 읽기'),
+      h('button.btn.sm' + (showThreats ? '.on' : ''), {
+        onclick: async (e) => {
+          showThreats = !showThreats;
+          e.currentTarget.classList.toggle('on', showThreats);
+          await setSetting('showThreats', showThreats);
+          draw();
+        },
+      }, '⚠️ 위협'),
+      h('button.btn.sm', {
+        onclick: async () => {
+          const fen = i === 0 ? (built.startFen || START) : plies[i - 1].fen;
+          await store.set('boardFen', fen);
+          nav('/board');
+        },
+      }, '🔬 분석판'));
+    const keNotes = h('div.ke-notes');
+
     host.appendChild(boardRow);
     host.appendChild(controls);
+    host.appendChild(insightRow);
+    host.appendChild(keNotes);
     host.appendChild(info);
     host.appendChild(h('div.card', h('div.dim.mb', '수 목록 — 눌러서 이동'), listBox));
     host.appendChild(h('div.card', h('div.dim.mb', '평가 그래프'), graphWrap));
@@ -218,7 +318,15 @@ export async function view(app, params) {
     reviewCleanup = stopAuto;
 
     function go(n) {
+      const prev = i;
       i = Math.max(0, Math.min(plies.length, n));
+      // 한 수씩 앞으로 갈 때만 소리·진동 — 목록을 눌러 훌쩍 건너뛸 때는 조용히
+      if (i === prev + 1 && i > 0) {
+        const p = plies[i - 1];
+        impact(/#/.test(p.san) ? 'win' : /\+/.test(p.san) ? 'check'
+          : /^O-O/.test(p.san) ? 'castle' : /=/.test(p.san) ? 'promote'
+          : /x/.test(p.san) ? 'capture' : 'move', st);
+      }
       draw();
     }
 
@@ -231,11 +339,36 @@ export async function view(app, params) {
         addMark(marks, plies[i - 1].to, 'hl');
         anim.from = plies[i - 1].frm;
         anim.to = plies[i - 1].to;
+        anim.kind = /x/.test(plies[i - 1].san) ? 'capture'
+          : /[+#]/.test(plies[i - 1].san) ? 'check' : 'move';
       }
-      const arrows = showArrows && i < plies.length ? lineArrows(plies[i].bestLine, 'hint') : null;
+      let arrows = showArrows && i < plies.length ? lineArrows(plies[i].bestLine, 'hint') : [];
+      let numbers = {};
+      const notes = [];
+      if (showElems || showThreats) {
+        const turn = fen.split(' ')[1] === 'b' ? 'b' : 'w';
+        if (showElems) {
+          const r = readPosition(fen, elems, turn);
+          for (const [sq, v] of Object.entries(r.marks)) (marks[sq] = marks[sq] || []).push(...v);
+          arrows = arrows.concat(r.arrows);
+          numbers = r.numbers;
+          notes.push(...r.notes);
+        }
+        if (showThreats) {
+          const r = readThreats(fen, turn === 'w' ? 'b' : 'w', threatMode);
+          for (const [sq, v] of Object.entries(r.marks)) (marks[sq] = marks[sq] || []).push(...v);
+          arrows = arrows.concat(r.arrows);
+          notes.push(...r.notes);
+        }
+      }
+      clear(keNotes);
+      for (const n of notes) keNotes.appendChild(h('span.ke-note', n));
+
       renderBoard(boardHost, fen, {
         orient: flipped ? (orient === 'w' ? 'b' : 'w') : orient,
-        marks, theme: st.boardTheme, shade: st.boardShade, coords: st.showCoords, arrows,
+        marks, numbers,
+        ...boardOpts(st),
+        arrows: arrows.length ? arrows : null,
         anim: st.animate ? anim : null,
       });
       const wpw = i === 0 ? (report && report.wp0) : (report && report.wp && report.wp[i - 1]);
@@ -258,7 +391,7 @@ export async function view(app, params) {
       info.appendChild(h('div.row',
         qIcon(p.cls, 24),
         h('span', { style: `font-weight:800;color:${qColor(p.cls)};margin-left:8px` },
-          `${p.mn}${p.side === 'w' ? '.' : '...'} ${p.san}${p.glyph}`),
+          `${p.mn}${p.side === 'w' ? '.' : '...'} ${st.figurine ? figurine(p.san) : p.san}${p.glyph}`),
         h('div.spacer'),
         h('span.badge.info', q.ko)));
       if (q.tip) info.appendChild(h('p.dim', { style: 'margin-top:4px' }, q.tip));
@@ -276,7 +409,7 @@ export async function view(app, params) {
           h('div.b', { style: `width:${100 - wpw}%` }, 100 - wpw >= 18 ? `흑 ${Math.round(100 - wpw)}%` : '')));
       }
       if (p.hint && p.hint !== p.san) {
-        info.appendChild(h('p.sub.mt', '💡 여기서는 ', h('b', p.hint), ' 이(가) 최선이었습니다'));
+        info.appendChild(h('p.sub.mt', '💡 여기서는 ', h('b', st.figurine ? figurine(p.hint) : p.hint), ' 이(가) 최선이었습니다'));
       }
       // 후보수 — 깊게 다시 본 국면에만 있다
       if (p.alts && p.alts.length) {
@@ -312,7 +445,7 @@ export async function view(app, params) {
         if (p.side === 'w') frag.appendChild(h('span.mvno', `${p.mn}.`));
         frag.appendChild(h('span.mv.q-' + p.cls + (k + 1 === i ? ' on' : ''), {
           onclick: () => go(k + 1),
-        }, p.san + p.glyph));
+        }, (st.figurine ? figurine(p.san) : p.san) + p.glyph));
         frag.appendChild(document.createTextNode(' '));
       });
       listBox.appendChild(frag);

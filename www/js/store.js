@@ -61,6 +61,43 @@ export const DEFAULTS = {
   autoplayMs: 900,         // 자동 재생 간격
   site: 'chesscom',        // 기본 가져오기 사이트 (chesscom | lichess)
   lichessName: '',
+
+  /* ---- 아래는 Chessis 에서 옮겨 온 것들 ---- */
+  // 판 꾸미기
+  arrowSize: 'big',        // 화살표 굵기 normal | big | huge
+  dragMove: true,          // 기물을 끌어서(밀어서) 옮기기
+  fx: true,                // 타격감 — 놓이는 칸의 파장·흔들림
+  boardCustom: null,       // {l,d} 를 직접 고르면 테마 대신 이걸 쓴다
+  boardBg: null,           // 판 배경 그림 (data URL)
+  pieceSet: 'cburnett',    // 기물 세트 id (pieces.js)
+  lastMoveStyle: 'square', // square | dot | frame
+  legalDots: true,         // 합법수 점
+  figurine: false,         // ♘f3 처럼 그림기물로 표기
+  animMs: 180,             // 기물 이동 애니메이션 (ms)
+  // 국면 읽기·위협
+  showElems: false,
+  keyElems: null,          // {pin:true, ...} — insight.js 의 DEFAULT_ELEMS 위에 덮어쓴다
+  showThreats: false,
+  threatMode: null,        // {material, mate, undef}
+  elemsInPlay: false,      // 대국 중에도 보여 줄까
+  threatsInPlay: false,
+  // 엔진·분석
+  engineLines: 3,          // 분석판 후보 수(MultiPV)
+  engineArrows: true,
+  analysisBy: 'time',      // time | depth
+  quickTime: 250, quickDepth: 12,
+  deepTime: 1200, deepDepth: 18,
+  reportLevel: 'quick',    // 기본 리포트 단계 (quick | deep)
+  gameSort: 'new',         // 경기 목록 정렬
+  resumeAnalysis: true,    // 이미 분석한 국면은 건너뛴다
+  notifyDone: true,        // 분석이 끝나면 알림
+  // 대국
+  clockMin: 0, clockInc: 0,   // 0 = 시간 제한 없음
+  chess960: false,
+  pauseOnBlunder: true,
+  pauseOnMistake: false,
+  showMoveStrength: true,     // 내 수 강도 실시간
+  showOppStrength: false,
 };
 
 let _settings = null;
@@ -68,6 +105,15 @@ let _settings = null;
 export async function settings() {
   if (!_settings) _settings = { ...DEFAULTS, ...((await store.get('settings')) || {}) };
   return _settings;
+}
+
+/**
+ * 기다리지 않고 지금 값을 꺼낸다.
+ * 앱은 시작할 때 settings() 를 먼저 기다리므로 화면이 그려지는 시점에는 항상 채워져 있다.
+ * (이게 없으면 판을 기본색으로 한 번 그렸다가 설정색으로 다시 그려 색이 깜빡였다.)
+ */
+export function settingsNow() {
+  return _settings || DEFAULTS;
 }
 
 export async function setSetting(k, v) {

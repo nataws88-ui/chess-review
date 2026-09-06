@@ -9,7 +9,7 @@ BASE="$(cd "$(dirname "$0")/.." && pwd -P)"
 WORK="${TMPDIR:-/tmp}/chessreview-javacheck"
 rm -rf "$WORK"
 mkdir -p "$WORK/stub/android/"{app,content,content/pm,content/res,graphics,net,os,util,view,webkit,widget} \
-         "$WORK/stub/androidx/webkit" "$WORK/stub/org/json" "$WORK/out" \
+         "$WORK/stub/androidx/webkit" "$WORK/stub/androidx/core/app" "$WORK/stub/org/json" "$WORK/out" \
          "$WORK/stub/com/google/android/gms/ads/interstitial" "$WORK/stub/com/google/android/ump"
 
 S="$WORK/stub"
@@ -18,6 +18,9 @@ cat > "$S/android/content/Context.java" <<'EOF'
 package android.content;
 public class Context {
   public static final String ACTIVITY_SERVICE = "activity";
+  public static final String NOTIFICATION_SERVICE = "notification";
+  public static final String VIBRATOR_SERVICE = "vibrator";
+  public String getPackageName() { return "com.bicyail.chessreview"; }
   public Object getSystemService(String name) { return null; }
   public ContentResolver getContentResolver() { return null; }
   public android.content.pm.ApplicationInfo getApplicationInfo() { return null; }
@@ -66,9 +69,13 @@ public class Intent {
   public static final String EXTRA_TEXT = "android.intent.extra.TEXT";
   public static final String EXTRA_MIME_TYPES = "android.intent.extra.MIME_TYPES";
   public static final String EXTRA_TITLE = "android.intent.extra.TITLE";
+  public static final int FLAG_ACTIVITY_SINGLE_TOP = 0x20000000;
+  public static final int FLAG_ACTIVITY_CLEAR_TOP = 0x04000000;
   public Intent() {}
   public Intent(String action) {}
   public Intent(String action, android.net.Uri uri) {}
+  public Intent(android.content.Context c, Class<?> cls) {}
+  public Intent setFlags(int f) { return this; }
   public String getAction() { return null; }
   public String getStringExtra(String n) { return null; }
   public android.net.Uri getData() { return null; }
@@ -108,6 +115,8 @@ public class Activity extends android.content.Context {
   public void startActivityForResult(android.content.Intent i, int req) {}
   public android.content.Intent getIntent() { return null; }
   public void setIntent(android.content.Intent i) {}
+  public int checkSelfPermission(String permission) { return 0; }
+  public void requestPermissions(String[] permissions, int requestCode) {}
 }
 EOF
 
@@ -138,9 +147,26 @@ cat > "$S/android/os/Build.java" <<'EOF'
 package android.os;
 public class Build {
   public static class VERSION { public static final int SDK_INT = 36; }
-  public static class VERSION_CODES { public static final int LOLLIPOP = 21, R = 30; }
+  public static class VERSION_CODES { public static final int LOLLIPOP = 21, R = 30, O = 26, M = 23, TIRAMISU = 33; }
 }
 EOF
+
+cat > "$S/android/os/Vibrator.java" <<'STUBEOF'
+package android.os;
+public class Vibrator {
+  public boolean hasVibrator() { return true; }
+  public void vibrate(long ms) {}
+  public void vibrate(VibrationEffect e) {}
+}
+STUBEOF
+
+cat > "$S/android/os/VibrationEffect.java" <<'STUBEOF'
+package android.os;
+public class VibrationEffect {
+  public static final int DEFAULT_AMPLITUDE = -1;
+  public static VibrationEffect createOneShot(long ms, int amplitude) { return new VibrationEffect(); }
+}
+STUBEOF
 
 cat > "$S/android/os/Looper.java" <<'EOF'
 package android.os;
@@ -504,6 +530,82 @@ public class UserMessagingPlatform {
 }
 EOF
 
+cat > "$S/android/Manifest.java" <<'EOF'
+package android;
+public final class Manifest {
+  public static final class permission {
+    public static final String POST_NOTIFICATIONS = "android.permission.POST_NOTIFICATIONS";
+  }
+}
+EOF
+
+cat > "$S/android/content/pm/PackageManager.java" <<'EOF'
+package android.content.pm;
+public class PackageManager { public static final int PERMISSION_GRANTED = 0, PERMISSION_DENIED = -1; }
+EOF
+
+cat > "$S/android/util/Base64.java" <<'EOF'
+package android.util;
+public class Base64 {
+  public static final int NO_WRAP = 2, DEFAULT = 0;
+  public static String encodeToString(byte[] input, int flags) { return ""; }
+  public static byte[] decode(String str, int flags) { return new byte[0]; }
+}
+EOF
+
+cat > "$S/android/app/Notification.java" <<'EOF'
+package android.app;
+public class Notification {}
+EOF
+
+cat > "$S/android/app/NotificationChannel.java" <<'EOF'
+package android.app;
+public class NotificationChannel {
+  public NotificationChannel(String id, CharSequence name, int importance) {}
+  public void setShowBadge(boolean b) {}
+}
+EOF
+
+cat > "$S/android/app/NotificationManager.java" <<'EOF'
+package android.app;
+public class NotificationManager {
+  public static final int IMPORTANCE_DEFAULT = 3, IMPORTANCE_LOW = 2;
+  public void createNotificationChannel(NotificationChannel c) {}
+  public void notify(int id, Notification n) {}
+}
+EOF
+
+cat > "$S/android/app/PendingIntent.java" <<'EOF'
+package android.app;
+public class PendingIntent {
+  public static final int FLAG_UPDATE_CURRENT = 134217728, FLAG_IMMUTABLE = 67108864;
+  public static PendingIntent getActivity(android.content.Context c, int req, android.content.Intent i, int flags) { return null; }
+}
+EOF
+
+cat > "$S/androidx/core/app/NotificationCompat.java" <<'EOF'
+package androidx.core.app;
+public class NotificationCompat {
+  public static class Builder {
+    public Builder(android.content.Context c, String channelId) {}
+    public Builder setSmallIcon(int icon) { return this; }
+    public Builder setContentTitle(CharSequence t) { return this; }
+    public Builder setContentText(CharSequence t) { return this; }
+    public Builder setAutoCancel(boolean b) { return this; }
+    public Builder setContentIntent(android.app.PendingIntent pi) { return this; }
+    public android.app.Notification build() { return new android.app.Notification(); }
+  }
+}
+EOF
+
+cat > "$S/androidx/core/app/NotificationManagerCompat.java" <<'EOF'
+package androidx.core.app;
+public class NotificationManagerCompat {
+  public static NotificationManagerCompat from(android.content.Context c) { return new NotificationManagerCompat(); }
+  public void notify(int id, android.app.Notification n) {}
+}
+EOF
+
 cat > "$S/org/json/JSONObject.java" <<'EOF'
 package org.json;
 public class JSONObject { public static String quote(String s) { return ""; } }
@@ -534,6 +636,7 @@ public final class R {
     public static final int admob_app_id = 1, admob_banner = 2, admob_interstitial = 3;
   }
   public static final class bool { public static final int admob_is_test = 4; }
+  public static final class mipmap { public static final int ic_launcher = 5; }
 }
 EOF
 
