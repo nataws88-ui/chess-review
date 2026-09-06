@@ -48,7 +48,7 @@ const MODULES = [
   ['board.js', ['renderBoard', 'loadSprite', 'fenMap', 'addMark', 'sqXY', 'xyToSq', 'THEMES',
     'boardOpts', 'ARROW_SIZES', 'ARROW_SIZE_KO']],
   ['ui.js', ['h', 'route', 'nav', 'screen', 'toast', 'httpGet', 'pickFile', 'saveFile', 'play', 'progressBar',
-    'applyTheme', 'onSwipe', 'cssVar', 'fmtSec', 'impact', 'moveKind', 'haptic']],
+    'applyTheme', 'onSwipe', 'cssVar', 'fmtSec', 'impact', 'moveKind', 'haptic', 'fitBoard']],
   ['views/home.js', ['view', 'accColor']],
   ['views/import.js', ['view']],
   ['views/game.js', ['view', 'drawEvalGraph']],

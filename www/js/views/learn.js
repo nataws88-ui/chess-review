@@ -2,7 +2,7 @@
  * Chessis 의 Key Elements 튜토리얼(슬라이드)을 옮긴 것이다.
  * 예제 국면은 우리가 직접 만든 것이라 앱과 함께 자유롭게 쓸 수 있다. */
 
-import { h, nav, screen, clear } from '../ui.js';
+import { h, nav, screen, clear, fitBoard } from '../ui.js';
 import { renderBoard, boardOpts } from '../board.js';
 import { settings } from '../store.js';
 import { readPosition } from '../insight.js';
@@ -69,6 +69,7 @@ export async function view(app) {
     h('button.btn.sm', { onclick: () => go(i + 1) }, '다음 ▶'));
 
   b.appendChild(h('div.card', titleEl, descEl, boardHost, notesEl, askEl, nav2, dots));
+  fitBoard(boardHost, [notesEl, askEl, nav2, dots]);
   b.appendChild(h('div.card',
     h('p.sub', '여기서 본 표시는 복기·대국·분석판 어디서나 켤 수 있습니다.'),
     h('div.btn-row.mt',

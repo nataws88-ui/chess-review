@@ -2,7 +2,7 @@
  * 상대가 실수를 두면 그 자리에서 응징하는 수를 찾는다.
  * 맞히면 레이팅이 오르고, 어려운 문제가 나온다. */
 
-import { h, nav, screen, toast, clear, impact, moveKind } from '../ui.js';
+import { h, nav, screen, toast, clear, impact, moveKind, fitBoard } from '../ui.js';
 import { renderBoard, addMark, boardOpts } from '../board.js';
 import { settingsNow, store } from '../store.js';
 import {
@@ -63,14 +63,17 @@ async function solveView(app) {
     themeBtn);
   const boardHost = h('div.board-wrap');
   const status = h('div.puz-status');
-  const meta = h('p.dim', { style: 'text-align:center;margin-top:6px' });
+  const meta = h('p.dim', { style: 'text-align:center;margin:-6px 0 8px' });
   const promo = h('div.promo.hidden');
   const btnRow = h('div.btn-row.mt');
   const solBox = h('div.hidden');
 
   b.appendChild(head);
   b.appendChild(themeRow);
-  b.appendChild(h('div.card', status, boardHost, promo, meta, btnRow, solBox));
+  // 난이도는 차례 안내 옆에 붙인다 — 판 아래 줄을 하나라도 줄여야 판이 커진다
+  b.appendChild(h('div.card', status, meta, boardHost, promo, btnRow, solBox));
+  // 접었다 펴도 판·차례·단추가 한 화면에 다 들어오게
+  const unfit = fitBoard(boardHost, [promo, btnRow]);
 
   function paintThemes() {
     clear(themeRow);
@@ -274,7 +277,7 @@ async function solveView(app) {
   }
 
   next();
-  return stopTimers;
+  return () => { stopTimers(); unfit(); };
 }
 
 /* ---------------- 연속 도전 (퍼즐 러시) ---------------- */
@@ -299,6 +302,7 @@ async function rushView(app) {
   const status = h('div.puz-status', '준비되면 시작하세요');
   const btnRow = h('div.btn-row.mt');
   b.appendChild(h('div.card', status, boardHost, btnRow));
+  const unfit = fitBoard(boardHost, [btnRow]);
 
   let score = 0, lives = 3, puz = null, run = null, sel = null, running = false;
   let timers = [];
@@ -403,7 +407,7 @@ async function rushView(app) {
   }
 
   paintBtns();
-  return stop;
+  return () => { stop(); unfit(); };
 }
 
 /* ---------------- 성적 ---------------- */

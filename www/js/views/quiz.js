@@ -1,7 +1,7 @@
 /* 문제 풀이 컴포넌트 — 판에서 직접 기물을 움직여 답한다.
  * 게임별 퀴즈와 훈련(SRS) 양쪽에서 같은 것을 쓴다. */
 
-import { h, toast, clear, impact } from '../ui.js';
+import { h, toast, clear, impact, fitBoard } from '../ui.js';
 import { renderBoard, addMark, lineArrows, boardOpts } from '../board.js';
 import { settingsNow } from '../store.js';
 import { readPosition, readThreats, DEFAULT_ELEMS } from '../insight.js';
@@ -61,6 +61,8 @@ export function mountQuiz(host, card, opts = {}) {
       boardHost, keNotes, promo, hint, chips, lineInfo, helpBtn, giveUp, fb),
   );
   host.appendChild(root);
+  // 판·안내·단추가 한 화면에 들어오게 (판이 화면에서 사라지면 스스로 손을 뗀다)
+  fitBoard(boardHost, [keNotes, promo, hint, giveUp]);
 
   draw(baseMarks(), true);
 

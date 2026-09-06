@@ -4,7 +4,7 @@
  * 목표를 놓치는 수를 두면 그 자리에서 물러 주고 왜 안 되는지 알려 준다 —
  * 지고 나서 알려 주면 배우는 게 없기 때문이다. */
 
-import { h, nav, screen, toast, clear, impact, moveKind, keepAwake } from '../ui.js';
+import { h, nav, screen, toast, clear, impact, moveKind, keepAwake, fitBoard } from '../ui.js';
 import { renderBoard, addMark, boardOpts } from '../board.js';
 import { settingsNow, store } from '../store.js';
 import { Chess } from '../lib/chess.js';
@@ -120,6 +120,7 @@ async function lessonView(app, ch, i) {
   const btnRow = h('div.btn-row.mt');
 
   b.appendChild(h('div.card', goalBar, status, boardHost, promo, btnRow, tip));
+  const unfit = fitBoard(boardHost, [promo, btnRow]);
 
   const engineOn = engine.available;
   if (!engineOn) status.textContent = '엔진이 없어 채점 없이 자유롭게 둡니다 (앱에서 열면 채점됩니다)';
@@ -354,7 +355,7 @@ async function lessonView(app, ch, i) {
   paintButtons();
   draw();
   boot();
-  return () => keepAwake(false);
+  return () => { keepAwake(false); unfit(); };
 }
 
 /* ---------------- 주제별 연달아 풀기 ---------------- */
@@ -380,6 +381,7 @@ async function themeView(app, ch) {
   const btnRow = h('div.btn-row.mt');
   b.appendChild(counter);
   b.appendChild(h('div.card', status, boardHost, btnRow));
+  const unfit = fitBoard(boardHost, [btnRow]);
 
   let k = 0, okCnt = 0, run = null, sel = null, done = false;
   const used = new Set();
@@ -473,5 +475,5 @@ async function themeView(app, ch) {
   }
 
   nextOne();
-  return stop;
+  return () => { stop(); unfit(); };
 }

@@ -1,6 +1,6 @@
 /* 한 경기 화면 — 🧩 문제 / 🎬 복기 / 📊 리포트 */
 
-import { h, nav, screen, toast, clear, onSwipe, cssVar, fmtSec, copyText, impact } from '../ui.js';
+import { h, nav, screen, toast, clear, onSwipe, cssVar, fmtSec, copyText, impact, fitBoard } from '../ui.js';
 import { renderBoard, addMark, lineArrows, boardOpts } from '../board.js';
 import { settings, setSetting, store } from '../store.js';
 import { loadBuilt, invalidate } from '../games.js';
@@ -294,6 +294,9 @@ export async function view(app, params) {
     host.appendChild(info);
     host.appendChild(h('div.card', h('div.dim.mb', '수 목록 — 눌러서 이동'), listBox));
     host.appendChild(h('div.card', h('div.dim.mb', '평가 그래프'), graphWrap));
+
+    // 판·수 이동 단추가 한 화면에 들어오게 (폰을 접었다 펴면 다시 잰다)
+    fitBoard(boardHost, [controls, insightRow]);
 
     if (st.swipeMove) onSwipe(boardRow, (d) => { stopAuto(); go(i + d); });
 

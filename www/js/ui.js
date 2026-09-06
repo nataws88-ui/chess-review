@@ -159,6 +159,73 @@ export function applyTheme(theme) {
   return dark ? 'dark' : 'light';
 }
 
+/* ---------------- 판을 화면에 맞추기 ----------------
+ * 폴더블은 펴면 화면이 넓어지면서(정사각에 가까워지면서) 판이 세로로 넘쳐,
+ * 「지금 무슨 차례인지」와 단추가 화면 밖으로 밀린다. 접으면 반대로 판이 작아진다.
+ * 그래서 판 크기를 폭이 아니라 **남은 높이**로 정한다 — 접었다 펴면 다시 잰다.
+ *
+ * @param wrap   .board-wrap 요소
+ * @param below  판 아래에서 반드시 같이 보여야 하는 요소들
+ * @returns 정리 함수 (화면을 나갈 때 부른다)
+ */
+export function fitBoard(wrap, below = []) {
+  if (!wrap || typeof window === 'undefined') return () => {};
+
+  const calc = () => {
+    const vh = window.innerHeight || 0;
+    if (!vh || !wrap.getBoundingClientRect) return;
+    wrap.style.maxWidth = '';                       // 먼저 풀어야 제 자리를 잰다
+    // 스크롤한 뒤에 다시 재도 같은 답이 나오도록 문서 기준 위치로 잰다
+    const top = wrap.getBoundingClientRect().top + (window.scrollY || 0);
+    if (!top && top !== 0) return;
+    let rest = 0;
+    for (const el of below) {
+      if (el && el.offsetHeight) rest += el.offsetHeight + 6;
+    }
+    const avail = vh - top - rest - bottomReserve() - 10;
+    const parent = wrap.parentElement;
+    const w = (parent && parent.clientWidth) || avail;
+    const px = Math.max(200, Math.min(w, Math.floor(avail)));
+    wrap.style.maxWidth = px + 'px';
+    wrap.style.marginLeft = 'auto';
+    wrap.style.marginRight = 'auto';
+  };
+
+  // 글꼴·이미지가 자리를 잡은 뒤 재야 정확하다.
+  // 판이 화면에서 사라지면 스스로 손을 뗀다 — 화면마다 정리 함수를 챙기지 않아도 되게.
+  let off = null;
+  const soon = () => {
+    if (wrap.isConnected === false) { if (off) off(); return; }
+    try { calc(); } catch (e) {}
+  };
+  requestAnimationFrame(soon);
+  const t1 = setTimeout(soon, 60);
+  const t2 = setTimeout(soon, 300);
+
+  window.addEventListener('resize', soon);
+  window.addEventListener('orientationchange', soon);
+  const vv = window.visualViewport;
+  if (vv && vv.addEventListener) vv.addEventListener('resize', soon);
+
+  off = () => {
+    clearTimeout(t1); clearTimeout(t2);
+    window.removeEventListener('resize', soon);
+    window.removeEventListener('orientationchange', soon);
+    if (vv && vv.removeEventListener) vv.removeEventListener('resize', soon);
+  };
+  return off;
+}
+
+/** 아래 메뉴·광고 배너가 먹는 높이 (#app 의 아래 여백에 그대로 들어 있다) */
+function bottomReserve() {
+  try {
+    const app = document.getElementById('app');
+    if (!app) return 86;
+    const v = parseFloat(getComputedStyle(app).paddingBottom);
+    return Number.isFinite(v) ? v : 86;
+  } catch (e) { return 86; }
+}
+
 /* ---------------- 전체 화면 ----------------
  * 판을 크게 보고 싶을 때 위 제목줄과 아래 메뉴를 감춘다 (Chessis 의 Full Screen).
  * 화면을 옮기면 자동으로 풀린다 — 갇히지 않게. */

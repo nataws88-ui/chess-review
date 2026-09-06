@@ -3,7 +3,7 @@
  * Chessis 의 Analysis Board + Board Editor + Key Elements + Threats + 엔진 라인을
  * 한 화면에 모았다. 엔진 없이도 국면 읽기·위협은 그대로 뜬다(판만 보고 내는 값이라). */
 
-import { h, nav, screen, toast, clear, impact, moveKind, isApp, copyText, readClipboard, fullscreen, isFullscreen } from '../ui.js';
+import { h, nav, screen, toast, clear, impact, moveKind, isApp, copyText, readClipboard, fullscreen, isFullscreen, fitBoard } from '../ui.js';
 import { renderBoard, addMark, boardOpts } from '../board.js';
 import { settings, setSetting, store } from '../store.js';
 import { Chess } from '../lib/chess.js';
@@ -93,6 +93,7 @@ export async function view(app, params) {
     editBar,
     navRow,
     movesEl));
+  fitBoard(boardHost, [notesEl, statusEl, editBar, navRow]);
 
   b.appendChild(h('div.card',
     h('div.row.mb',

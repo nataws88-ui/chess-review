@@ -6,7 +6,7 @@
  *   지난 대국 이어하기 · 사람처럼 두는 상대 · 무작위 배치(체스960)
  *   대국 중에도 국면 읽기·위협 겹쳐 보기 */
 
-import { h, nav, screen, toast, clear, impact, moveKind, keepAwake, isApp } from '../ui.js';
+import { h, nav, screen, toast, clear, impact, moveKind, keepAwake, isApp, fitBoard } from '../ui.js';
 import { renderBoard, addMark, boardOpts } from '../board.js';
 import { settings, setSetting, store } from '../store.js';
 import { Chess } from '../lib/chess.js';
@@ -125,6 +125,8 @@ export async function view(app) {
     h('div.btn-row.mt',
       h('button.btn', { onclick: saveGame }, '💾 이 대국 저장·분석'),
       h('button.btn.ghost', { onclick: () => nav('/') }, '나가기'))));
+
+  const unfit = fitBoard(boardHost, [promo, evalBar, strengthEl, statusEl, controls]);
 
   keepAwake(true);
 
@@ -582,7 +584,7 @@ export async function view(app) {
     }
   }
 
-  return () => { keepAwake(false); stopTick(); };
+  return () => { keepAwake(false); stopTick(); unfit(); };
 }
 
 function fmtClock(ms) {
