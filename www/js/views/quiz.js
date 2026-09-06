@@ -50,7 +50,7 @@ export function mountQuiz(host, card, opts = {}) {
 
   const root = h('div',
     opts.header || null,
-    h('div.card',
+    h('div.card.board',
       h('div.row.mb',
         h('span.badge.' + (card.kind === 'good' ? 'good' : card.kind === 'bonus' ? 'bonus' : 'mistake'),
           KIND_LABEL[card.kind] || KIND_LABEL.mistake),
@@ -58,11 +58,13 @@ export function mountQuiz(host, card, opts = {}) {
         card.gemGain ? h('span.dim', `다른 수였다면 -${Math.round(card.gemGain)}%p`) : null),
       h('h3', card.question || `${card.moveLabel} — 최선의 수는?`),
       card.ctx ? h('p.dim', { style: 'overflow-x:auto;white-space:nowrap;margin-bottom:10px' }, '직전 수순: ' + card.ctx) : null,
-      boardHost, keNotes, promo, hint, chips, lineInfo, helpBtn, giveUp, fb),
+      // 좁으면 판 아래로, 넓으면 판 옆으로. 해설(fb)은 넓게 봐야 하니 늘 판 아래에 둔다.
+      h('div.boardgrid', boardHost, h('div.sidepanel', keNotes, promo, hint, helpBtn, giveUp)),
+      chips, lineInfo, fb),
   );
   host.appendChild(root);
   // 판·안내·단추가 한 화면에 들어오게 (판이 화면에서 사라지면 스스로 손을 뗀다)
-  fitBoard(boardHost, [keNotes, promo, hint, giveUp]);
+  fitBoard(boardHost, [keNotes, promo, hint, helpBtn, giveUp, chips, lineInfo]);
 
   draw(baseMarks(), true);
 

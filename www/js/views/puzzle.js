@@ -2,7 +2,7 @@
  * 상대가 실수를 두면 그 자리에서 응징하는 수를 찾는다.
  * 맞히면 레이팅이 오르고, 어려운 문제가 나온다. */
 
-import { h, nav, screen, toast, clear, impact, moveKind, fitBoard } from '../ui.js';
+import { h, nav, screen, toast, clear, impact, moveKind, fitBoard, fullscreen, isFullscreen } from '../ui.js';
 import { renderBoard, addMark, boardOpts } from '../board.js';
 import { settingsNow, store } from '../store.js';
 import {
@@ -24,10 +24,21 @@ export async function view(app, params) {
 
 async function solveView(app) {
   const st = settingsNow();
+  const bigBtn = h('button.icon-btn', {
+    onclick: (e) => {
+      const on = !isFullscreen();
+      fullscreen(on);
+      e.currentTarget.textContent = on ? '⛶' : '⛶';
+      window.dispatchEvent(new Event('resize'));   // 판을 새 크기에 맞춰 다시 잰다
+    },
+    'aria-label': '판 크게',
+  }, '⛶');
   const s = screen('🧩 퍼즐', {
     back: false,
-    right: h('button.icon-btn', { onclick: () => nav('/puzzle/stats'), 'aria-label': '성적' }, '📊'),
+    right: h('div.row', { style: 'gap:2px' }, bigBtn,
+      h('button.icon-btn', { onclick: () => nav('/puzzle/stats'), 'aria-label': '성적' }, '📊')),
   });
+  s.root.classList.add('boardview');
   app.appendChild(s.root);
   const b = s.body;
 
@@ -44,6 +55,7 @@ async function solveView(app) {
 
   // 폰 화면에서는 판이 제일 중요하다 — 머리글은 한 줄로 눌러 놓는다
   const deltaEl = h('span.delta');
+  const meta = h('span.dim');
   const ratingEl = h('b', String(state.rating));
   const streakEl = h('b', String(state.streak));
   const todayEl = h('b', String(state.today || 0));
@@ -55,25 +67,27 @@ async function solveView(app) {
       themeBtn.classList.toggle('on', !themeRow.classList.contains('hidden'));
     },
   }, '🏷 주제');
+  // 한 줄에 다 담는다 — 판 위의 줄이 하나 줄면 그만큼 판이 커진다
   const head = h('div.puz-head',
     h('span', '🏅 ', ratingEl, h('span.dim', '점'), deltaEl),
-    h('span', '🔥 ', streakEl, h('span.dim', '연속')),
-    h('span', '📅 ', todayEl, h('span.dim', '오늘')),
+    h('span', '🔥 ', streakEl),
+    h('span', '📅 ', todayEl),
+    meta,
     h('div.spacer'),
     themeBtn);
   const boardHost = h('div.board-wrap');
   const status = h('div.puz-status');
-  const meta = h('p.dim', { style: 'text-align:center;margin:-6px 0 8px' });
   const promo = h('div.promo.hidden');
   const btnRow = h('div.btn-row.mt');
   const solBox = h('div.hidden');
 
   b.appendChild(head);
   b.appendChild(themeRow);
-  // 난이도는 차례 안내 옆에 붙인다 — 판 아래 줄을 하나라도 줄여야 판이 커진다
-  b.appendChild(h('div.card', status, meta, boardHost, promo, btnRow, solBox));
+  // 좁으면 판 아래로, 넓으면 판 옆으로 (CSS .boardgrid 가 결정한다)
+  b.appendChild(h('div.card.board',
+    h('div.boardgrid', boardHost, h('div.sidepanel', status, promo, btnRow, solBox))));
   // 접었다 펴도 판·차례·단추가 한 화면에 다 들어오게
-  const unfit = fitBoard(boardHost, [promo, btnRow]);
+  const unfit = fitBoard(boardHost, [status, promo, btnRow]);
 
   function paintThemes() {
     clear(themeRow);
@@ -110,7 +124,7 @@ async function solveView(app) {
     clear(solBox);
     status.className = 'puz-status';
     status.textContent = '상대가 두는 중…';
-    meta.textContent = `난이도 ${puz.rating}` + (puz.src === 'mine' ? ` · 내 경기 (${puz.game || ''})` : '');
+    meta.textContent = `난이도 ${puz.rating}` + (puz.src === 'mine' ? ' · 내 경기' : '');
     paintButtons();
     draw();
     // 상대의 실수를 눈앞에서 둔다 — 무엇이 잘못됐는지 보게
@@ -285,6 +299,7 @@ async function solveView(app) {
 async function rushView(app) {
   const st = settingsNow();
   const s = screen('🔥 연속 도전');
+  s.root.classList.add('boardview');
   app.appendChild(s.root);
   const b = s.body;
   const pool = await allPuzzles();
@@ -301,8 +316,9 @@ async function rushView(app) {
   const boardHost = h('div.board-wrap');
   const status = h('div.puz-status', '준비되면 시작하세요');
   const btnRow = h('div.btn-row.mt');
-  b.appendChild(h('div.card', status, boardHost, btnRow));
-  const unfit = fitBoard(boardHost, [btnRow]);
+  b.appendChild(h('div.card.board',
+    h('div.boardgrid', boardHost, h('div.sidepanel', status, btnRow))));
+  const unfit = fitBoard(boardHost, [status, btnRow]);
 
   let score = 0, lives = 3, puz = null, run = null, sel = null, running = false;
   let timers = [];

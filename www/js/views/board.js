@@ -19,6 +19,7 @@ const PIECE_KO = { k: '킹', q: '퀸', r: '룩', b: '비숍', n: '나이트', p:
 export async function view(app, params) {
   const st = await settings();
   const s = screen('🔬 분석판', { back: false });
+  s.root.classList.add('boardview');
   app.appendChild(s.root);
   const b = s.body;
 

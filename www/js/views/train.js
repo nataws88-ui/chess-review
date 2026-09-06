@@ -63,6 +63,7 @@ export async function hub(app) {
 export async function view(app) {
   const st = await settings();
   const s = screen('🔁 내 실수 복습');
+  s.root.classList.add('boardview');
   app.appendChild(s.root);
   const b = s.body;
 
@@ -137,15 +138,16 @@ export async function view(app) {
     if (!card.legals) card.legals = legalMovesData(card.fen);   // 필요할 때만 계산
     save();
     const rec = srs[card.id];
-    const header = h('div.row.mb',
-      h('span.dim', `카드 ${qi + 1} / ${queue.length}`),
+    // 두 줄이던 머리글을 한 줄로 — 그만큼 판이 커진다
+    const header = h('div.row.mb', { style: 'flex-wrap:wrap;gap:6px' },
+      h('span.dim', `카드 ${qi + 1}/${queue.length}`),
+      h('span.dim', `· ${card.d} ${card.g}`),
       h('div.spacer'),
       h('span.badge.info', rec ? `${rec.reps + 1}회째` : '새 카드'),
-      h('span.dim', { style: 'margin-left:8px' }, `✅ ${okCnt}`));
-    const meta = h('p.dim', { style: 'margin-bottom:8px' }, `📅 ${card.d} · ${card.g}`);
+      h('span.dim', { style: 'margin-left:6px' }, `✅ ${okCnt}`));
 
     mountQuiz(holder, card, {
-      header: h('div', header, meta),
+      header,
       nextLabel: qi + 1 < queue.length ? '다음 카드 →' : '훈련 마치기',
       onDone: (ok) => {
         tries++;

@@ -4,7 +4,7 @@
  * 목표를 놓치는 수를 두면 그 자리에서 물러 주고 왜 안 되는지 알려 준다 —
  * 지고 나서 알려 주면 배우는 게 없기 때문이다. */
 
-import { h, nav, screen, toast, clear, impact, moveKind, keepAwake, fitBoard } from '../ui.js';
+import { h, nav, screen, toast, clear, impact, moveKind, keepAwake, fitBoard, fullscreen, isFullscreen } from '../ui.js';
 import { renderBoard, addMark, boardOpts } from '../board.js';
 import { settingsNow, store } from '../store.js';
 import { Chess } from '../lib/chess.js';
@@ -101,6 +101,7 @@ async function lessonView(app, ch, i) {
   if (!item) { nav(`/practice/${ch.id}`, true); return; }
 
   const s = screen(item.title);
+  s.root.classList.add('boardview');
   app.appendChild(s.root);
   const b = s.body;
 
@@ -112,15 +113,21 @@ async function lessonView(app, ch, i) {
 
   const goalBar = h('div.goalbar',
     h('span.badge.info', GOAL_KO[item.goal]),
-    h('span.dim', { style: 'margin-left:8px' }, `${mySide === 'w' ? '백' : '흑'}으로 둡니다`));
+    h('span.dim', { style: 'margin-left:8px' }, `${mySide === 'w' ? '백' : '흑'}으로 둡니다`),
+    h('div.spacer'),
+    h('button.icon-btn', {
+      onclick: () => { fullscreen(!isFullscreen()); window.dispatchEvent(new Event('resize')); },
+      'aria-label': '판 크게',
+    }, '⛶'));
   const boardHost = h('div.board-wrap');
   const status = h('div.puz-status', '두어 보세요');
   const promo = h('div.promo.hidden');
   const tip = h('p.sub', { style: 'margin-top:8px' }, '💡 ', item.tip);
   const btnRow = h('div.btn-row.mt');
 
-  b.appendChild(h('div.card', goalBar, status, boardHost, promo, btnRow, tip));
-  const unfit = fitBoard(boardHost, [promo, btnRow]);
+  b.appendChild(h('div.card.board', goalBar,
+    h('div.boardgrid', boardHost, h('div.sidepanel', status, promo, btnRow, tip))));
+  const unfit = fitBoard(boardHost, [status, promo, btnRow, tip]);
 
   const engineOn = engine.available;
   if (!engineOn) status.textContent = '엔진이 없어 채점 없이 자유롭게 둡니다 (앱에서 열면 채점됩니다)';
@@ -363,6 +370,7 @@ async function lessonView(app, ch, i) {
 async function themeView(app, ch) {
   const st = settingsNow();
   const s = screen(`${ch.ic} ${ch.name}`);
+  s.root.classList.add('boardview');
   app.appendChild(s.root);
   const b = s.body;
 
@@ -380,8 +388,9 @@ async function themeView(app, ch) {
   const status = h('div.puz-status');
   const btnRow = h('div.btn-row.mt');
   b.appendChild(counter);
-  b.appendChild(h('div.card', status, boardHost, btnRow));
-  const unfit = fitBoard(boardHost, [btnRow]);
+  b.appendChild(h('div.card.board',
+    h('div.boardgrid', boardHost, h('div.sidepanel', status, btnRow))));
+  const unfit = fitBoard(boardHost, [status, btnRow]);
 
   let k = 0, okCnt = 0, run = null, sel = null, done = false;
   const used = new Set();

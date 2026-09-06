@@ -178,9 +178,14 @@ export function fitBoard(wrap, below = []) {
     // 스크롤한 뒤에 다시 재도 같은 답이 나오도록 문서 기준 위치로 잰다
     const top = wrap.getBoundingClientRect().top + (window.scrollY || 0);
     if (!top && top !== 0) return;
+    // 판 옆(오른쪽)에 선 것은 세로를 먹지 않는다 — 넓은 화면에서 옆으로 세울 때를 위해
+    const bottom = wrap.getBoundingClientRect().bottom + (window.scrollY || 0);
     let rest = 0;
     for (const el of below) {
-      if (el && el.offsetHeight) rest += el.offsetHeight + 6;
+      if (!el || !el.offsetHeight) continue;
+      const t = el.getBoundingClientRect().top + (window.scrollY || 0);
+      if (t < bottom - 4) continue;
+      rest += el.offsetHeight + 6;
     }
     const avail = vh - top - rest - bottomReserve() - 10;
     const parent = wrap.parentElement;

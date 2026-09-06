@@ -35,6 +35,7 @@ const SAVE = 'sparState';
 export async function view(app) {
   const st = await settings();
   const s = screen('⚔️ 엔진 대국', { back: false });
+  s.root.classList.add('boardview');
   app.appendChild(s.root);
   const b = s.body;
 

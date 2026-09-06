@@ -46,6 +46,7 @@ export async function view(app, params) {
     right: h('button.icon-btn', { onclick: () => menu(), 'aria-label': '더보기' }, '⋯'),
   });
   app.appendChild(s.root);
+  s.root.classList.add('boardview');
   const b = s.body;
 
   b.appendChild(h('p.sub', { style: 'margin:-4px 0 12px' },

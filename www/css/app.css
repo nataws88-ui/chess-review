@@ -377,6 +377,28 @@ label.fld .k{display:block;font-size:.82rem;color:var(--sub);font-weight:700;mar
 body.fullscreen .nav{display:none}
 body.fullscreen .top{display:none}
 body.fullscreen .screen .body{padding-top:8px}
+body.fullscreen #app{padding-left:0}
+
+/* ---------- 폰을 펴면: 아래 탭을 왼쪽 기둥으로 ----------
+ * 아래 탭은 세로를 76px 먹는다. 판은 세로가 모자라서 작아지는데 가로는 남으므로,
+ * 화면이 넓어지는 순간 메뉴를 옆으로 세워 그 76px 를 판에 준다. */
+@media (min-width:620px){
+  .nav{right:auto;top:0;width:76px;flex-direction:column;justify-content:center;
+    border-top:0;border-right:1px solid var(--line);padding-top:var(--safe-t)}
+  .nav a{flex:none;padding:13px 2px;font-size:.66rem}
+  .nav a .ic{font-size:1.4rem}
+  #app{max-width:none;padding-left:76px;
+    padding-bottom:calc(10px + var(--safe-b) + var(--ad-h))}
+  .screen{max-width:880px;margin:0 auto}
+  .toast{left:calc(50% + 38px);bottom:calc(26px + var(--safe-b) + var(--ad-h))}
+}
+
+/* ---------- 판이 주인공인 화면 ----------
+ * 판 말고는 다 줄인다. 여백·카드 테두리가 세로를 20~30px 먹는데,
+ * 그만큼이 그대로 판 크기다. */
+.screen.boardview .body{padding:8px}
+.screen.boardview .card.board{padding:8px;margin-bottom:8px}
+.screen.boardview .puz-status{margin-bottom:6px}
 
 /* ---------- 타격감 (수가 놓이는 순간) ----------
  * 도착 칸에서 고리가 퍼지고, 기물이 한 번 눌렸다 펴진다.
@@ -427,3 +449,18 @@ body.fullscreen .screen .body{padding-top:8px}
 .puz-head{display:flex;gap:14px;align-items:center;flex-wrap:wrap;
   font-size:14px;margin-bottom:8px;color:var(--dim)}
 .puz-head b{color:var(--tx);font-size:16px;margin-right:2px}
+
+/* ---------- 넓은 화면: 판 옆에 정보·단추를 세운다 ----------
+ * 폰을 펴면 화면이 정사각에 가까워진다. 세로는 모자라고 가로는 남으므로,
+ * 판 아래에 있던 것을 옆으로 옮기면 그만큼 판이 커진다. */
+.boardgrid{display:flex;flex-direction:column;gap:8px}
+.sidepanel{display:flex;flex-direction:column;gap:8px}
+@media (min-width:620px){
+  .boardgrid{flex-direction:row;align-items:flex-start;gap:12px}
+  /* 판이 먼저다 — 옆칸은 딱 필요한 만큼만 가져간다(늘어나지 않는다) */
+  .boardgrid>.board-wrap{width:auto;flex:1 1 auto;min-width:0}
+  .boardgrid>.sidepanel{flex:0 0 150px}
+  /* 좁은 칸에서는 단추를 위아래로 쌓는다 — 옆으로 붙이면 글씨가 잘린다 */
+  .boardgrid>.sidepanel .btn-row{flex-direction:column}
+  .boardgrid>.sidepanel .puz-status{margin:0 0 4px;font-size:14px;text-align:left}
+}
