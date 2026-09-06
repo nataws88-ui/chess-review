@@ -115,10 +115,16 @@ async function lessonView(app, ch, i) {
     h('span.badge.info', GOAL_KO[item.goal]),
     h('span.dim', { style: 'margin-left:8px' }, `${mySide === 'w' ? '백' : '흑'}으로 둡니다`),
     h('div.spacer'),
-    h('button.icon-btn', {
-      onclick: () => { fullscreen(!isFullscreen()); window.dispatchEvent(new Event('resize')); },
+    h('button.chip', {
+      onclick: (e) => {
+        const on = !isFullscreen();
+        fullscreen(on);
+        e.currentTarget.textContent = on ? '✕ 작게' : '⛶ 크게';
+        e.currentTarget.classList.toggle('on', on);
+        window.dispatchEvent(new Event('resize'));
+      },
       'aria-label': '판 크게',
-    }, '⛶'));
+    }, '⛶ 크게'));
   const boardHost = h('div.board-wrap');
   const status = h('div.puz-status', '두어 보세요');
   const promo = h('div.promo.hidden');

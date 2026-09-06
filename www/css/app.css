@@ -376,7 +376,8 @@ label.fld .k{display:block;font-size:.82rem;color:var(--sub);font-weight:700;mar
 /* 전체 화면 — 판만 크게 */
 body.fullscreen .nav{display:none}
 body.fullscreen .top{display:none}
-body.fullscreen .screen .body{padding-top:8px}
+/* 제목줄을 감추면 그 줄이 갖고 있던 상태바 여백도 사라진다 — 여기서 대신 준다 */
+body.fullscreen .screen .body{padding-top:calc(8px + var(--safe-t))}
 body.fullscreen #app{padding-left:0}
 
 /* ---------- 폰을 펴면: 아래 탭을 왼쪽 기둥으로 ----------

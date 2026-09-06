@@ -24,19 +24,21 @@ export async function view(app, params) {
 
 async function solveView(app) {
   const st = settingsNow();
-  const bigBtn = h('button.icon-btn', {
+  // 판을 최대로 — 제목줄과 메뉴까지 감춘다. 이 단추는 점수줄에 있어야 한다
+  // (제목줄에 두면 전체 화면에서 같이 숨어 되돌릴 길이 없어진다).
+  const bigBtn = h('button.chip', {
     onclick: (e) => {
       const on = !isFullscreen();
       fullscreen(on);
-      e.currentTarget.textContent = on ? '⛶' : '⛶';
+      e.currentTarget.textContent = on ? '✕ 작게' : '⛶ 크게';
+      e.currentTarget.classList.toggle('on', on);
       window.dispatchEvent(new Event('resize'));   // 판을 새 크기에 맞춰 다시 잰다
     },
     'aria-label': '판 크게',
-  }, '⛶');
+  }, '⛶ 크게');
   const s = screen('🧩 퍼즐', {
     back: false,
-    right: h('div.row', { style: 'gap:2px' }, bigBtn,
-      h('button.icon-btn', { onclick: () => nav('/puzzle/stats'), 'aria-label': '성적' }, '📊')),
+    right: h('button.icon-btn', { onclick: () => nav('/puzzle/stats'), 'aria-label': '성적' }, '📊'),
   });
   s.root.classList.add('boardview');
   app.appendChild(s.root);
@@ -74,7 +76,8 @@ async function solveView(app) {
     h('span', '📅 ', todayEl),
     meta,
     h('div.spacer'),
-    themeBtn);
+    themeBtn,
+    bigBtn);
   const boardHost = h('div.board-wrap');
   const status = h('div.puz-status');
   const promo = h('div.promo.hidden');
