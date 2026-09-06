@@ -140,10 +140,11 @@ export function onSwipe(el, cb) {
   }, { passive: true });
 }
 
-/* 꾹 누르고 있으면 계속 넘어간다 — 끝까지 보려고 스무 번 누르지 않아도 된다.
- * 손을 떼면 click 이 한 번 더 오므로 반복은 0.45초 뒤부터 센다. */
+/* 톡 치면 한 번, 꾹 누르고 있으면 계속 — 끝까지 보려고 스무 번 누르지 않아도 된다.
+ * 눌러서 이미 넘어갔으면 손을 뗄 때 한 수 더 가지 않도록 그 click 은 흘린다.
+ * (click 으로도 부르므로 키보드·접근성에서도 그대로 눌린다) */
 export function holdRepeat(btn, fn) {
-  let wait = null, rep = null;
+  let wait = null, rep = null, fired = false;
   const stop = () => {
     if (wait) clearTimeout(wait);
     if (rep) clearInterval(rep);
@@ -155,12 +156,18 @@ export function holdRepeat(btn, fn) {
     stop();
     wait = setTimeout(() => {
       btn.classList.add('hold');
+      fired = true;
+      fn();
       rep = setInterval(fn, 130);
-    }, 450);
+    }, 420);
   });
   for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) {
     btn.addEventListener(ev, stop);
   }
+  btn.addEventListener('click', () => {
+    if (fired) { fired = false; return; }
+    fn();
+  });
   window.addEventListener('blur', stop);
   return stop;
 }

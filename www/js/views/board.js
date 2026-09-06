@@ -71,8 +71,8 @@ export async function view(app, params) {
     }, label);
   }
 
-  const prevBtn = h('button.btn.step', { 'aria-label': '이전 수', onclick: () => go(ply - 1) }, '◀');
-  const nextBtn = h('button.btn.step', { 'aria-label': '다음 수', onclick: () => go(ply + 1) }, '▶');
+  const prevBtn = h('button.btn.step', { 'aria-label': '이전 수' }, '◀');
+  const nextBtn = h('button.btn.step', { 'aria-label': '다음 수' }, '▶');
   holdRepeat(prevBtn, () => go(ply - 1));
   holdRepeat(nextBtn, () => go(ply + 1));
   const navRow = h('div.movebar',

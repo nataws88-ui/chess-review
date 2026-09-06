@@ -251,8 +251,8 @@ export async function view(app, params) {
 
     // ── 이동 바 — 제일 자주 누르는 자리라 크게, 화면 너비를 나눠 갖는다
     const playBtn = h('button.btn.auto', { onclick: () => toggleAuto() }, '▶ 자동');
-    const prevBtn = h('button.btn.step', { 'aria-label': '이전 수', onclick: () => step(-1) }, '◀');
-    const nextBtn = h('button.btn.step', { 'aria-label': '다음 수', onclick: () => step(1) }, '▶');
+    const prevBtn = h('button.btn.step', { 'aria-label': '이전 수' }, '◀');
+    const nextBtn = h('button.btn.step', { 'aria-label': '다음 수' }, '▶');
     holdRepeat(prevBtn, () => step(-1));       // 꾹 누르면 주르륵 되감긴다
     holdRepeat(nextBtn, () => step(1));
     const controls = h('div.movebar',
